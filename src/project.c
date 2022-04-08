@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h> 
+#include <glib.h>
 
 //*** For the Windows SDK _tempnam function ***//
 #ifdef _WIN32
@@ -295,8 +296,8 @@ int allocdata(Project *pr)
     int errcode = 0;
 
     // Allocate node & link ID hash tables
-    pr->network.NodeHashTable = hashtable_create();
-    pr->network.LinkHashTable = hashtable_create();
+    pr->network.NodeHashTable = g_hash_table_new(g_str_hash, g_str_equal);
+    pr->network.LinkHashTable = g_hash_table_new(g_str_hash, g_str_equal);
     ERRCODE(MEMCHECK(pr->network.NodeHashTable));
     ERRCODE(MEMCHECK(pr->network.LinkHashTable));
 
@@ -453,11 +454,11 @@ void freedata(Project *pr)
     // Free hash table memory
     if (pr->network.NodeHashTable != NULL)
     {
-        hashtable_free(pr->network.NodeHashTable);
+        g_hash_table_destroy(pr->network.NodeHashTable);
     }
     if (pr->network.LinkHashTable != NULL)
     {
-        hashtable_free(pr->network.LinkHashTable);
+        g_hash_table_destroy(pr->network.LinkHashTable);
     }
 }
 
@@ -804,7 +805,7 @@ int findnode(Network *network, char *id)
 **----------------------------------------------------------------
 */
 {
-    return (hashtable_find(network->NodeHashTable, id));
+    return (GPOINTER_TO_INT (g_hash_table_lookup(network->NodeHashTable, id)));
 }
 
 int findlink(Network *network, char *id)
@@ -816,14 +817,14 @@ int findlink(Network *network, char *id)
 **----------------------------------------------------------------
 */
 {
-    return (hashtable_find(network->LinkHashTable, id));
+    return (GPOINTER_TO_INT (g_hash_table_lookup(network->LinkHashTable, id)));
 }
 
 int findtank(Network *network, int index)
 /*----------------------------------------------------------------
 **  Input:   index = node index
 **  Output:  none
-**  Returns: index of tank with given node id, or NOTFOUND if tank not found
+**  Returns: index of tank with given node id, or 0 if tank not found
 **  Purpose: for use in the deletenode function
 **----------------------------------------------------------------
 */
@@ -833,14 +834,14 @@ int findtank(Network *network, int index)
     {
         if (network->Tank[i].Node == index) return i;
     }
-    return NOTFOUND;
+    return 0;
 }
 
 int findpump(Network *network, int index)
 /*----------------------------------------------------------------
 **  Input:   index = link ID
 **  Output:  none
-**  Returns: index of pump with given link id, or NOTFOUND if pump not found
+**  Returns: index of pump with given link id, or 0 if pump not found
 **  Purpose: for use in the deletelink function
 **----------------------------------------------------------------
 */
@@ -850,14 +851,14 @@ int findpump(Network *network, int index)
     {
         if (network->Pump[i].Link == index) return i;
     }
-    return NOTFOUND;
+    return 0;
 }
 
 int findvalve(Network *network, int index)
 /*----------------------------------------------------------------
 **  Input:   index = link ID
 **  Output:  none
-**  Returns: index of valve with given link id, or NOTFOUND if valve not found
+**  Returns: index of valve with given link id, or 0 if valve not found
 **  Purpose: for use in the deletelink function
 **----------------------------------------------------------------
 */
@@ -867,7 +868,7 @@ int findvalve(Network *network, int index)
     {
         if (network->Valve[i].Link == index) return i;
     }
-    return NOTFOUND;
+    return 0;
 }
 
 int findpattern(Network *network, char *id)

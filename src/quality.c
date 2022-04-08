@@ -15,6 +15,7 @@ Last Updated: 05/15/2019
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <glib.h>
 
 #include "mempool.h"
 #include "types.h"

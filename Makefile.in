@@ -12,7 +12,6 @@ PGO = @PGO@
 epanet_c = $(SRC)epanet.c
 epanet2_c = $(SRC)epanet2.c
 genmmd_c = $(SRC)genmmd.c
-hash_c = $(SRC)hash.c
 hydcoeffs_c = $(SRC)hydcoeffs.c
 hydraul_c = $(SRC)hydraul.c
 hydsolver_c = $(SRC)hydsolver.c
@@ -37,7 +36,6 @@ epanet2_h = $(INC)epanet2.h $(INC)epanet2_enums.h
 enumstxt_h = $(SRC)enumstxt.h
 errors_h = $(SRC)errors.dat
 funcs_h = $(SRC)funcs.h
-hash_h = $(SRC)hash.h
 mempool_h = $(SRC)mempool.h
 text_h = $(SRC)text.h
 types_h = $(SRC)types.h
@@ -45,7 +43,6 @@ types_h = $(SRC)types.h
 epanet_pgo = $(OBJ)epanet.pgo
 epanet2_pgo = $(OBJ)epanet2.pgo
 genmmd_pgo = $(OBJ)genmmd.pgo
-hash_pgo = $(OBJ)hash.pgo
 hydcoeffs_pgo = $(OBJ)hydcoeffs.pgo
 hydraul_pgo = $(OBJ)hydraul.pgo
 hydsolver_pgo = $(OBJ)hydsolver.pgo
@@ -68,7 +65,6 @@ smatrix_pgo = $(OBJ)smatrix.pgo
 epanet_o = $(OBJ)epanet.o
 epanet2_o = $(OBJ)epanet2.o
 genmmd_o = $(OBJ)genmmd.o
-hash_o = $(OBJ)hash.o
 hydcoeffs_o = $(OBJ)hydcoeffs.o
 hydraul_o = $(OBJ)hydraul.o
 hydsolver_o = $(OBJ)hydsolver.o
@@ -96,55 +92,46 @@ epanet_lib = -lepanet
 epanet_so = $(BIN)libepanet@SO@
 epanet_exe = $(BIN)epanet@EXE@
 
-objspgo = $(epanet_pgo) $(epanet2_pgo) $(genmmd_pgo) $(hash_pgo) \
-	$(hydcoeffs_pgo) $(hydraul_pgo) $(hydsolver_pgo) $(hydstatus_pgo) \
-	$(inpfile_pgo) $(input1_pgo) $(input2_pgo) $(input3_pgo) $(mempool_pgo) \
-	$(output_pgo) $(project_pgo) $(quality_pgo) $(qualreact_pgo) \
-	$(qualroute_pgo) $(report_pgo) $(rules_pgo) $(smatrix_pgo)
+objspgo = $(epanet_pgo) $(epanet2_pgo) $(genmmd_pgo) $(hydcoeffs_pgo) \
+	$(hydraul_pgo) $(hydsolver_pgo) $(hydstatus_pgo) $(inpfile_pgo) \
+	$(input1_pgo) $(input2_pgo) $(input3_pgo) $(mempool_pgo) $(output_pgo) \
+	$(project_pgo) $(quality_pgo) $(qualreact_pgo) $(qualroute_pgo) \
+	$(report_pgo) $(rules_pgo) $(smatrix_pgo)
 
-objs = $(epanet_o) $(epanet2_o) $(genmmd_o) $(hash_o) $(hydcoeffs_o) \
-	$(hydraul_o) $(hydsolver_o) $(hydstatus_o) $(inpfile_o) $(input1_o) \
-	$(input2_o) $(input3_o) $(mempool_o) $(output_o) $(project_o) $(quality_o) \
+objs = $(epanet_o) $(epanet2_o) $(genmmd_o) $(hydcoeffs_o) $(hydraul_o) \
+	$(hydsolver_o) $(hydstatus_o) $(inpfile_o) $(input1_o) $(input2_o) \
+	$(input3_o) $(mempool_o) $(output_o) $(project_o) $(quality_o) \
 	$(qualreact_o) $(qualroute_o) $(report_o) $(rules_o) $(smatrix_o)
 
-epanet_dep_pgo = $(epanet_c) $(epanet_h) $(hash_h) $(types_h) $(funcs_h) \
-	$(text_h) $(enumstxt_h) Makefile
-epanet2_dep_pgo = $(epanet2_c) $(hash_h) $(types_h) $(funcs_h) $(epanet2_h) \
-	$(epanet_h) Makefile
+epanet_dep_pgo = $(epanet_c) $(epanet_h) $(types_h) $(funcs_h) $(text_h) \
+	$(enumstxt_h) Makefile
+epanet2_dep_pgo = $(epanet2_c) $(types_h) $(funcs_h) $(epanet2_h) $(epanet_h) \
+	Makefile
 genmmd_dep_pgo = $(genmmd_c) Makefile
-hash_dep_pgo = $(hash_c) $(hash_h) Makefile
-hydcoeffs_dep_pgo = $(hydcoeffs_c) $(hash_h) $(types_h) $(funcs_h) Makefile
-hydraul_dep_pgo = $(hydraul_c) $(hash_h) $(types_h) $(funcs_h) $(text_h) \
-	Makefile
-hydsolver_dep_pgo = $(hydsolver_c) $(hash_h) $(types_h) $(funcs_h) $(text_h) \
-	Makefile
-hydstatus_dep_pgo = $(hydstatus_c) $(hash_h) $(types_h) $(funcs_h) Makefile
-inpfile_dep_pgo = $(inpfile_c) $(hash_h) $(types_h) $(funcs_h) $(text_h) \
-	Makefile
-input1_dep_pgo = $(input1_c) $(hash_h) $(types_h) $(funcs_h) $(text_h) Makefile
-input2_dep_pgo = $(input2_c) $(hash_h) $(types_h) $(funcs_h) $(text_h) Makefile
-input3_dep_pgo = $(input3_c) $(hash_h) $(types_h) $(funcs_h) $(text_h) Makefile
+hydcoeffs_dep_pgo = $(hydcoeffs_c) $(types_h) $(funcs_h) Makefile
+hydraul_dep_pgo = $(hydraul_c) $(types_h) $(funcs_h) $(text_h) Makefile
+hydsolver_dep_pgo = $(hydsolver_c) $(types_h) $(funcs_h) $(text_h) Makefile
+hydstatus_dep_pgo = $(hydstatus_c) $(types_h) $(funcs_h) Makefile
+inpfile_dep_pgo = $(inpfile_c) $(types_h) $(funcs_h) $(text_h) Makefile
+input1_dep_pgo = $(input1_c) $(types_h) $(funcs_h) $(text_h) Makefile
+input2_dep_pgo = $(input2_c) $(types_h) $(funcs_h) $(text_h) Makefile
+input3_dep_pgo = $(input3_c) $(types_h) $(funcs_h) $(text_h) Makefile
 main_dep_pgo = $(main_c) $(epanet2_h) Makefile
 mempool_dep_pgo = $(mempool_c) $(mempool_h) Makefile
-output_dep_pgo = $(output_c) $(hash_h) $(types_h) $(funcs_h) $(text_h) Makefile
-project_dep_pgo = $(project_c) $(hash_h) $(types_h) $(funcs_h) $(errors_h) \
+output_dep_pgo = $(output_c) $(types_h) $(funcs_h) $(text_h) Makefile
+project_dep_pgo = $(project_c) $(types_h) $(funcs_h) $(errors_h) Makefile
+quality_dep_pgo = $(quality_c) $(mempool_h) $(types_h) $(funcs_h) Makefile
+qualreact_dep_pgo = $(qualreact_c) $(types_h) Makefile
+qualroute_dep_pgo = $(qualroute_c) $(mempool_h) $(types_h) Makefile
+report_dep_pgo = $(report_c) $(text_h) $(types_h) $(funcs_h) $(vars_h) Makefile
+rules_dep_pgo = $(rules_c) $(text_h) $(types_h) $(funcs_h) $(vars_h) Makefile
+smatrix_dep_pgo = $(smatrix_c) $(text_h) $(types_h) $(funcs_h) $(vars_h) \
 	Makefile
-quality_dep_pgo = $(quality_c) $(mempool_h) $(hash_h) $(types_h) $(funcs_h) \
-	Makefile
-qualreact_dep_pgo = $(qualreact_c) $(hash_h) $(types_h) Makefile
-qualroute_dep_pgo = $(qualroute_c) $(mempool_h) $(hash_h) $(types_h) Makefile
-report_dep_pgo = $(report_c) $(text_h) $(hash_h) $(types_h) $(funcs_h) \
-	$(vars_h) Makefile
-rules_dep_pgo = $(rules_c) $(text_h) $(hash_h) $(types_h) $(funcs_h) $(vars_h) \
-	Makefile
-smatrix_dep_pgo = $(smatrix_c) $(text_h) $(hash_h) $(types_h) $(funcs_h) \
-	$(vars_h) Makefile
 
 ifeq ($(PGO), 1)
 	epanet_dep = $(epanetpgo_exe)
 	epanet2_dep = $(epanetpgo_exe)
 	genmmd_dep = $(epanetpgo_exe)
-	hash_dep = $(epanetpgo_exe)
 	hydcoeffs_dep = $(epanetpgo_exe)
 	hydraul_dep = $(epanetpgo_exe)
 	hydsolver_dep = $(epanetpgo_exe)
@@ -168,7 +155,6 @@ else
 	epanet_dep = $(epanet_dep_pgo)
 	epanet2_dep = $(epanet2_dep_pgo)
 	genmmd_dep = $(genmmd_dep_pgo)
-	hash_dep = $(hash_dep_pgo)
 	hydcoeffs_dep = $(hydcoeffs_dep_pgo)
 	hydraul_dep = $(hydraul_dep_pgo)
 	hydsolver_dep = $(hydsolver_dep_pgo)
@@ -199,9 +185,6 @@ $(epanet2_pgo): $(epanet2_dep_pgo)
 
 $(genmmd_pgo): $(genmmd_dep_pgo)
 	$(CC) $(CPGOFLAGS) $(genmmd_c) -o $(genmmd_pgo)
-
-$(hash_pgo): $(hash_dep_pgo)
-	$(CC) $(CPGOFLAGS) $(hash_c) -o $(hash_pgo)
 
 $(hydcoeffs_pgo): $(hydcoeffs_dep_pgo)
 	$(CC) $(CPGOFLAGS) $(hydcoeffs_c) -o $(hydcoeffs_pgo)
@@ -273,9 +256,6 @@ $(epanet2_o): $(epanet2_dep)
 
 $(genmmd_o): $(genmmd_dep)
 	$(CC) $(COFLAGS) $(genmmd_c) -o $(genmmd_o)
-
-$(hash_o): $(hash_dep)
-	$(CC) $(COFLAGS) $(hash_c) -o $(hash_o)
 
 $(hydcoeffs_o): $(hydcoeffs_dep)
 	$(CC) $(COFLAGS) $(hydcoeffs_c) -o $(hydcoeffs_o)

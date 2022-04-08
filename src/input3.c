@@ -15,10 +15,10 @@ Last Updated: 11/29/2019
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <glib.h>
 
 #include "types.h"
 #include "funcs.h"
-#include "hash.h"
 #include "text.h"
 
 // Defined in ENUMSTXT.H

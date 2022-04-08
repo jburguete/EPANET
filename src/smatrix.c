@@ -23,8 +23,8 @@
 #include <string.h>
 #include <math.h>
 #include <limits.h>
-
 #include <time.h>  //For optional timer macros
+#include <glib.h>
 
 #include "text.h"
 #include "types.h"

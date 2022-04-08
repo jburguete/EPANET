@@ -14,6 +14,7 @@ Last Updated: 05/15/2019
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <glib.h>
 #include "types.h"
 
 // Exported functions

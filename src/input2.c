@@ -15,10 +15,10 @@ Last Updated: 10/29/2019
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <glib.h>
 
 #include "types.h"
 #include "funcs.h"
-#include "hash.h"
 #include "text.h"
 
 #define MAXERRS 10      // Max. input errors reported
@@ -477,7 +477,7 @@ int addnodeID(Network *net, int n, char *id)
     if (strlen(id) > MAXID)
       return 252;  // invalid format (too long)
     strncpy(net->Node[n].ID, id, MAXID);
-    hashtable_insert(net->NodeHashTable, net->Node[n].ID, n);
+    g_hash_table_insert(net->NodeHashTable, net->Node[n].ID, GINT_TO_POINTER (n));
     return 0;
 }
 
@@ -496,7 +496,7 @@ int addlinkID(Network *net, int n, char *id)
     if (strlen(id) > MAXID)
       return 252; // invalid formt (too long);
     strncpy(net->Link[n].ID, id, MAXID);
-    hashtable_insert(net->LinkHashTable, net->Link[n].ID, n);
+    g_hash_table_insert(net->LinkHashTable, net->Link[n].ID, GINT_TO_POINTER (n));
     return 0;
 }
 

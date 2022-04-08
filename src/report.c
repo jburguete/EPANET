@@ -14,17 +14,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
-#ifdef _WIN32
-#define snprintf _snprintf
-#endif
-
 #include <math.h>
 #include <time.h>
+#include <glib.h>
 
 #include "types.h"
 #include "funcs.h"
-#include "hash.h"
 #include "text.h"
 
 #define MAXCOUNT 10    // Max. # of disconnected nodes listed

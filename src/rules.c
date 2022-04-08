@@ -14,15 +14,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <glib.h>
 
 #include "types.h"
 #include "funcs.h"
-#include "hash.h"
 #include "text.h"
-
-#ifdef _WIN32
-#define snprintf _snprintf
-#endif
 
 enum Rulewords {
   r_RULE,

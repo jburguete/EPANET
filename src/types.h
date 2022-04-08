@@ -16,8 +16,6 @@
 
 #include <stdio.h>
 
-#include "hash.h"
-
 /*
 -------------------------------------------
    Definition of 4-byte integers & reals
@@ -42,8 +40,6 @@ typedef  int          INT4;
 #define   MAXLINE   1024     // Max. # characters read from input line
 #define   MAXFNAME  259      // Max. # characters in file name
 #define   MAXTOKS   40       // Max. items per line of input
-#define   TRUE      1
-#define   FALSE     0
 #define   FULL      2
 #define   BIG       1.E10
 #define   TINY      1.E-6
@@ -97,10 +93,7 @@ typedef  int          INT4;
 */
 #define INT(x)   ((int)(x))                   // integer portion of x
 #define FRAC(x)  ((x)-(int)(x))               // fractional part of x
-#define ABS(x)   (((x)<0) ? -(x) : (x))       // absolute value of x
-#define MIN(x,y) (((x)<=(y)) ? (x) : (y))     // minimum of x and y
-#define MAX(x,y) (((x)>=(y)) ? (x) : (y))     // maximum of x and y
-#define ROUND(x) (((x)>=0) ? (int)((x)+.5) : (int)((x)-.5))
+#define ROUND(x) ((int)round(x))
                                               // round-off of x
 #define MOD(x,y) ((x)%(y))                    // x modulus y
 #define SQR(x)   ((x)*(x))                    // x-squared
@@ -834,7 +827,7 @@ typedef struct {
   Scurve   *Curve;         // Data curve array
   Scontrol *Control;       // Simple controls array
   Srule    *Rule;          // Rule-based controls array
-  HashTable
+  GHashTable
     *NodeHashTable,        // Hash table for Node ID names
     *LinkHashTable;        // Hash table for Link ID names
   Padjlist *Adjlist;       // Node adjacency lists

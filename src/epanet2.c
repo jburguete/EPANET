@@ -13,6 +13,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <glib.h>
 
 #include "types.h"
 #include "funcs.h"

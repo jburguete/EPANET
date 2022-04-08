@@ -13,9 +13,11 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include <float.h>
 #include <math.h>
+#include <glib.h>
 
 #include "epanet2_2.h"
 #include "types.h"
@@ -1779,7 +1781,8 @@ int DLLEXPORT EN_addnode(EN_Project p, char *id, int nodeType, int *index)
         // shift indices of non-Junction nodes at end of Node array
         for (i = net->Nnodes; i > net->Njuncs; i--)
         {
-            hashtable_update(net->NodeHashTable, net->Node[i].ID, i + 1);
+            g_hash_table_replace(net->NodeHashTable, net->Node[i].ID,
+                                 GINT_TO_POINTER (i + 1));
             net->Node[i + 1] = net->Node[i];
         }
     
@@ -1860,7 +1863,7 @@ int DLLEXPORT EN_addnode(EN_Project p, char *id, int nodeType, int *index)
     node->Comment = NULL;
 
     // Insert new node into hash table
-    hashtable_insert(net->NodeHashTable, node->ID, nIdx);
+    g_hash_table_insert(net->NodeHashTable, node->ID, GINT_TO_POINTER (nIdx));
     *index = nIdx;
     return 0;
 }
@@ -1911,7 +1914,7 @@ int DLLEXPORT EN_deletenode(EN_Project p, int index, int actionCode)
     EN_getnodetype(p, index, &nodeType);
 
     // Remove node from its hash table
-    hashtable_delete(net->NodeHashTable, node->ID);
+    g_hash_table_remove(net->NodeHashTable, node->ID);
 
     // Free memory allocated to node's demands, WQ source & comment
     freedemands(node);
@@ -1923,7 +1926,7 @@ int DLLEXPORT EN_deletenode(EN_Project p, int index, int actionCode)
     {
         net->Node[i] = net->Node[i + 1];
         // ... update node's entry in the hash table
-        hashtable_update(net->NodeHashTable, net->Node[i].ID, i);
+        g_hash_table_replace(net->NodeHashTable, net->Node[i].ID, GINT_TO_POINTER (i));
     }
 
     // If deleted node is a tank, remove it from the Tank array
@@ -2028,12 +2031,12 @@ int DLLEXPORT EN_setnodeid(EN_Project p, int index, char *newid)
     if (!namevalid(newid)) return 252;
 
     // Check if another node with same name exists
-    if (hashtable_find(net->NodeHashTable, newid) > 0) return 215;
+    if (g_hash_table_lookup(net->NodeHashTable, newid)) return 215;
 
     // Replace the existing node ID with the new value
-    hashtable_delete(net->NodeHashTable, net->Node[index].ID);
+    g_hash_table_remove(net->NodeHashTable, net->Node[index].ID);
     strncpy(net->Node[index].ID, newid, MAXID);
-    hashtable_insert(net->NodeHashTable, net->Node[index].ID, index);
+    g_hash_table_insert(net->NodeHashTable, net->Node[index].ID, GINT_TO_POINTER (index));
     return 0;
 }
 
@@ -3140,8 +3143,8 @@ int DLLEXPORT EN_addlink(EN_Project p, char *id, int linkType,
     if (linkType < CVPIPE || linkType > GPV) return 251;
 
     // Lookup the link's from and to nodes
-    n1 = hashtable_find(net->NodeHashTable, fromNode);
-    n2 = hashtable_find(net->NodeHashTable, toNode);
+    n1 = GPOINTER_TO_INT (g_hash_table_lookup(net->NodeHashTable, fromNode));
+    n2 = GPOINTER_TO_INT (g_hash_table_lookup(net->NodeHashTable, toNode));
     if (n1 == 0 || n2 == 0) return 203;
 
     // Check that valve link has legal connections
@@ -3242,7 +3245,7 @@ int DLLEXPORT EN_addlink(EN_Project p, char *id, int linkType,
     link->Comment = NULL;
     link->Vertices = NULL;
 
-    hashtable_insert(net->LinkHashTable, link->ID, n);
+    g_hash_table_insert(net->LinkHashTable, link->ID, GINT_TO_POINTER (n));
     *index = n;
     return 0;
 }
@@ -3288,7 +3291,7 @@ int DLLEXPORT EN_deletelink(EN_Project p, int index, int actionCode)
     EN_getlinktype(p, index, &linkType);
 
     // Remove link from its hash table
-    hashtable_delete(net->LinkHashTable, link->ID);
+    g_hash_table_remove(net->LinkHashTable, link->ID);
 
     // Remove link's comment and vertices
     free(link->Comment);
@@ -3299,7 +3302,7 @@ int DLLEXPORT EN_deletelink(EN_Project p, int index, int actionCode)
     {
         net->Link[i] = net->Link[i + 1];
         // ... update link's entry in the hash table
-        hashtable_update(net->LinkHashTable, net->Link[i].ID, i);
+        g_hash_table_replace(net->LinkHashTable, net->Link[i].ID, GINT_TO_POINTER (i));
     }
 
     // Adjust references to higher numbered links for pumps & valves
@@ -3403,12 +3406,12 @@ int DLLEXPORT EN_setlinkid(EN_Project p, int index, char *newid)
     if (!namevalid(newid)) return 252;
 
     // Check if another link with same name exists
-    if (hashtable_find(net->LinkHashTable, newid) > 0) return 215;
+    if (g_hash_table_lookup(net->LinkHashTable, newid)) return 215;
 
     // Replace the existing link ID with the new value
-    hashtable_delete(net->LinkHashTable, net->Link[index].ID);
+    g_hash_table_remove(net->LinkHashTable, net->Link[index].ID);
     strncpy(net->Link[index].ID, newid, MAXID);
-    hashtable_insert(net->LinkHashTable, net->Link[index].ID, index);
+    g_hash_table_insert(net->LinkHashTable, net->Link[index].ID, GINT_TO_POINTER (index));
     return 0;
 }
 
