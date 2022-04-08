@@ -1,263 +1,17 @@
-/*  MULTIPLE MINIMUM DEGREE ROW RE-ORDERING ALGORITHM 
- *
- *  Modified to work with Fortran-style arrays and be thread-safe.
- *
+/**
+ * \file genmmd.c
+ * \brief Source file for multiple minimum degree row re-ordering algorithm.
  */
 
 #include <math.h>
+#include "genmmd.h"
 
-int genmmd (int *neqns, int *xadj, int *adjncy, int *invp, int *perm,
-            int *delta, int *dhead, int *qsize, int *llist, int *marker,
-            int *maxint, int *nofsub);
-
-static int mmdint_ (int *neqns, int *xadj, int *dhead, int *dforw,
-                    int *dbakw, int *qsize, int *llist, int *marker);
-static int mmdelm_ (int *mdnode, int *xadj, int *adjncy, int *dhead, int *dforw,
-                    int *dbakw, int *qsize, int *llist, int *marker,
-                    int *maxint, int *tag);
-static int mmdupd_ (int *ehead, int *neqns, int *xadj, int *adjncy, int *delta,
-                    int *mdeg, int *dhead, int *dforw, int *dbakw, int *qsize,
-                    int *llist, int *marker, int *maxint, int *tag);
-static int mmdnum_ (int *neqns, int *perm, int *invp, int *qsize);
-
-//=============================================================================
-
-/* genmmd.f -- translated by f2c (version of 23 April 1993  18:34:30).
-   You must link the resulting object file with the libraries:
-        -lf2c -lm   (in that order)
-*/
-
-//#include "f2c.h"
-
-/* Sivan: I modified INTEGER*2 -> INTEGER*4 */
-/* *************************************************************** */
-/* *************************************************************** */
-/* ****     GENMMD ..... MULTIPLE MINIMUM EXTERNAL DEGREE     **** */
-/* *************************************************************** */
-/* *************************************************************** */
-
-/*     AUTHOR - JOSEPH W.H. LIU */
-/*              DEPT OF COMPUTER SCIENCE, YORK UNIVERSITY. */
-
-/*     PURPOSE - THIS ROUTINE IMPLEMENTS THE MINIMUM DEGREE */
-/*        ALGORITHM.  IT MAKES USE OF THE IMPLICIT REPRESENTATION */
-/*        OF ELIMINATION GRAPHS BY QUOTIENT GRAPHS, AND THE */
-/*        NOTION OF INDISTINGUISHABLE NODES.  IT ALSO IMPLEMENTS */
-/*        THE MODIFICATIONS BY MULTIPLE ELIMINATION AND MINIMUM */
-/*        EXTERNAL DEGREE. */
-/*        --------------------------------------------- */
-/*        CAUTION - THE ADJACENCY VECTOR ADJNCY WILL BE */
-/*        DESTROYED. */
-/*        --------------------------------------------- */
-
-/*     INPUT PARAMETERS - */
-/*        NEQNS  - NUMBER OF EQUATIONS. */
-/*        (XADJ,ADJNCY) - THE ADJACENCY STRUCTURE. */
-/*        DELTA  - TOLERANCE VALUE FOR MULTIPLE ELIMINATION. */
-/*        MAXINT - MAXIMUM MACHINE REPRESENTABLE (SHORT) INTEGER */
-/*                 (ANY SMALLER ESTIMATE WILL DO) FOR MARKING */
-/*                 NODES. */
-
-/*     OUTPUT PARAMETERS - */
-/*        PERM   - THE MINIMUM DEGREE ORDERING. */
-/*        INVP   - THE INVERSE OF PERM. */
-/*        NOFSUB - AN UPPER BOUND ON THE NUMBER OF NONZERO */
-/*                 SUBSCRIPTS FOR THE COMPRESSED STORAGE SCHEME. */
-
-/*     WORKING PARAMETERS - */
-/*        DHEAD  - VECTOR FOR HEAD OF DEGREE LISTS. */
-/*        INVP   - USED TEMPORARILY FOR DEGREE FORWARD LINK. */
-/*        PERM   - USED TEMPORARILY FOR DEGREE BACKWARD LINK. */
-/*        QSIZE  - VECTOR FOR SIZE OF SUPERNODES. */
-/*        LLIST  - VECTOR FOR TEMPORARY LINKED LISTS. */
-/*        MARKER - A TEMPORARY MARKER VECTOR. */
-
-/*     PROGRAM SUBROUTINES - */
-/*        MMDELM, MMDINT, MMDNUM, MMDUPD. */
-
-/* *************************************************************** */
-int
-genmmd (int *neqns, int *xadj, int *adjncy, int *invp, int *perm,
-        int *delta, int *dhead, int *qsize, int *llist, int *marker,
-        int *maxint, int *nofsub)
-{
-  /* System generated locals */
-  int i__1;
-
-  /* Local variables */
-  int mdeg = 0, ehead = 0, i = 0, mdlmt = 0, mdnode = 0;
-  //extern /* Subroutine */ int mmdelm_(), mmdupd_(), mmdint_(), mmdnum_();
-  int nextmd = 0, tag = 0, num = 0;
-
-
-/* *************************************************************** */
-
-/*         INTEGER*2  ADJNCY(1), DHEAD(1) , INVP(1)  , LLIST(1) , */
-/*     1              MARKER(1), PERM(1)  , QSIZE(1) */
-
-/* *************************************************************** */
-
-  /* Parameter adjustments */
-  //--marker; --llist; --qsize; --dhead; --perm; --invp; --adjncy; --xadj;
-
-  /* Function Body */
-  if (*neqns <= 0)
-    {
-      return 0;
-    }
-
-/*        ------------------------------------------------ */
-/*        INITIALIZATION FOR THE MINIMUM DEGREE ALGORITHM. */
-/*        ------------------------------------------------ */
-  *nofsub = 0;
-  //mmdint_(neqns, &xadj[1], &adjncy[1], &dhead[1], &invp[1], &perm[1],
-  //        &qsize[1], &llist[1], &marker[1]);
-  mmdint_ (neqns, xadj, dhead, invp, perm, qsize, llist, marker);
-
-/*        ---------------------------------------------- */
-/*        NUM COUNTS THE NUMBER OF ORDERED NODES PLUS 1. */
-/*        ---------------------------------------------- */
-  num = 1;
-
-/*        ----------------------------- */
-/*        ELIMINATE ALL ISOLATED NODES. */
-/*        ----------------------------- */
-  nextmd = dhead[1];
-L100:
-  if (nextmd <= 0)
-    {
-      goto L200;
-    }
-  mdnode = nextmd;
-  nextmd = invp[mdnode];
-  marker[mdnode] = *maxint;
-  invp[mdnode] = -num;
-  ++num;
-  goto L100;
-
-L200:
-/*        ---------------------------------------- */
-/*        SEARCH FOR NODE OF THE MINIMUM DEGREE. */
-/*        MDEG IS THE CURRENT MINIMUM DEGREE; */
-/*        TAG IS USED TO FACILITATE MARKING NODES. */
-/*        ---------------------------------------- */
-  if (num > *neqns)
-    {
-      goto L1000;
-    }
-  tag = 1;
-  dhead[1] = 0;
-  mdeg = 2;
-L300:
-  if (dhead[mdeg] > 0)
-    {
-      goto L400;
-    }
-  ++mdeg;
-  goto L300;
-L400:
-/*            ------------------------------------------------- */
-/*            USE VALUE OF DELTA TO SET UP MDLMT, WHICH GOVERNS */
-/*            WHEN A DEGREE UPDATE IS TO BE PERFORMED. */
-/*            ------------------------------------------------- */
-  mdlmt = mdeg + *delta;
-  ehead = 0;
-
-L500:
-  mdnode = dhead[mdeg];
-  if (mdnode > 0)
-    {
-      goto L600;
-    }
-  ++mdeg;
-  if (mdeg > mdlmt)
-    {
-      goto L900;
-    }
-  goto L500;
-L600:
-/*                ---------------------------------------- */
-/*                REMOVE MDNODE FROM THE DEGREE STRUCTURE. */
-/*                ---------------------------------------- */
-  nextmd = invp[mdnode];
-  dhead[mdeg] = nextmd;
-  if (nextmd > 0)
-    {
-      perm[nextmd] = -mdeg;
-    }
-  invp[mdnode] = -num;
-  *nofsub = *nofsub + mdeg + qsize[mdnode] - 2;
-  if (num + qsize[mdnode] > *neqns)
-    {
-      goto L1000;
-    }
-/*                ---------------------------------------------- */
-/*                ELIMINATE MDNODE AND PERFORM QUOTIENT GRAPH */
-/*                TRANSFORMATION.  RESET TAG VALUE IF NECESSARY. */
-/*                ---------------------------------------------- */
-  ++tag;
-  if (tag < *maxint)
-    {
-      goto L800;
-    }
-  tag = 1;
-  i__1 = *neqns;
-  for (i = 1; i <= i__1; ++i)
-    {
-      if (marker[i] < *maxint)
-        {
-          marker[i] = 0;
-        }
-/* L700: */
-    }
-L800:
-  //mmdelm_(&mdnode, &xadj[1], &adjncy[1], &dhead[1], &invp[1], &perm[1],
-  //        &qsize[1], &llist[1], &marker[1], maxint, &tag);
-  mmdelm_ (&mdnode, xadj, adjncy, dhead, invp, perm, qsize, llist,
-           marker, maxint, &tag);
-  num += qsize[mdnode];
-  llist[mdnode] = ehead;
-  ehead = mdnode;
-  if (*delta >= 0)
-    {
-      goto L500;
-    }
-L900:
-/*            ------------------------------------------- */
-/*            UPDATE DEGREES OF THE NODES INVOLVED IN THE */
-/*            MINIMUM DEGREE NODES ELIMINATION. */
-/*            ------------------------------------------- */
-  if (num > *neqns)
-    {
-      goto L1000;
-    }
-  //mmdupd_(&ehead, neqns, &xadj[1], &adjncy[1], delta, &mdeg, &dhead[1],
-  //        &invp[1], &perm[1], &qsize[1], &llist[1], &marker[1], maxint, &tag);
-  mmdupd_ (&ehead, neqns, xadj, adjncy, delta, &mdeg, dhead,
-           invp, perm, qsize, llist, marker, maxint, &tag);
-  goto L300;
-
-L1000:
-  //mmdnum_(neqns, &perm[1], &invp[1], &qsize[1]);
-  mmdnum_ (neqns, perm, invp, qsize);
-
-  //++marker; ++llist; ++qsize; ++dhead; ++perm; ++invp; ++adjncy; ++xadj;
-  return 0;
-
-}                               /* genmmd_ */
-
-/* *************************************************************** */
 /* *************************************************************** */
 /* ***     MMDINT ..... MULT MINIMUM DEGREE INITIALIZATION     *** */
 /* *************************************************************** */
-/* *************************************************************** */
 
 /*     AUTHOR - JOSEPH W.H. LIU */
 /*              DEPT OF COMPUTER SCIENCE, YORK UNIVERSITY. */
-
-/*     PURPOSE - THIS ROUTINE PERFORMS INITIALIZATION FOR THE */
-/*        MULTIPLE ELIMINATION VERSION OF THE MINIMUM DEGREE */
-/*        ALGORITHM. */
 
 /*     INPUT PARAMETERS - */
 /*        NEQNS  - NUMBER OF EQUATIONS. */
@@ -269,29 +23,25 @@ L1000:
 /*        LLIST  - LINKED LIST. */
 /*        MARKER - MARKER VECTOR. */
 
-/* *************************************************************** */
-
-
-static int
-mmdint_ (int *neqns, int *xadj, int *dhead, int *dforw,
-         int *dbakw, int *qsize, int *llist, int *marker)
+/**
+ * function to perfom initialization for the multiple elimination version of the
+ * mimimum degree algorithm
+ */
+static inline void
+mmdint (int *neqns,             ///< number of equations.
+        int *xadj,              ///< adjacency structure.
+        int *dhead,
+        int *dforw,
+        int *dbakw,             ///< degree doubly linked structure.
+        int *qsize,             ///< size of supernode (initialized to one).
+        int *llist,             ///< linked list.
+        int *marker)            ///< marker vector.
 {
   /* System generated locals */
   int i__1;
 
   /* Local variables */
   int ndeg = 0, node = 0, fnode = 0;
-
-
-/* *************************************************************** */
-
-/*         INTEGER*2  ADJNCY(1), DBAKW(1) , DFORW(1) , DHEAD(1) , */
-/*     1              LLIST(1) , MARKER(1), QSIZE(1) */
-
-/* *************************************************************** */
-
-  /* Parameter adjustments */
-  //--marker; --llist; --qsize; --dbakw; --dforw; --dhead; --adjncy; --xadj;
 
   /* Function Body */
   i__1 = *neqns;
@@ -301,7 +51,6 @@ mmdint_ (int *neqns, int *xadj, int *dhead, int *dforw,
       qsize[node] = 1;
       marker[node] = 0;
       llist[node] = 0;
-/* L100: */
     }
 /*        ------------------------------------------ */
 /*        INITIALIZE THE DEGREE DOUBLY LINKED LISTS. */
@@ -318,16 +67,11 @@ mmdint_ (int *neqns, int *xadj, int *dhead, int *dforw,
           dbakw[fnode] = node;
         }
       dbakw[node] = -ndeg;
-/* L200: */
     }
-  return 0;
+}
 
-}                               /* mmdint_ */
-
-/* *************************************************************** */
 /* *************************************************************** */
 /* **     MMDELM ..... MULTIPLE MINIMUM DEGREE ELIMINATION     *** */
-/* *************************************************************** */
 /* *************************************************************** */
 
 /*     AUTHOR - JOSEPH W.H. LIU */
@@ -354,9 +98,24 @@ mmdint_ (int *neqns, int *xadj, int *dhead, int *dforw,
 
 /* *************************************************************** */
 
-static int
-mmdelm_ (int *mdnode, int *xadj, int *adjncy, int *dhead, int *dforw,
-         int *dbakw, int *qsize, int *llist, int *marker, int *maxint, int *tag)
+/**
+ * function to eliminate the node mdnode of minimum degree from the adjacency
+ * structure, which is stored in the quotient graph format. it also transforms
+ * the quatient graph representation of the elimination graph.
+ */
+static inline void
+mmdelm (int *mdnode,            ///< node of minimum degree.
+        int *xadj,
+        int *adjncy,            ///< updated adjacency structure.
+        int *dhead,
+        int *dforw,
+        int *dbakw,             ///< degree double linked structure.
+        int *qsize,             ///< size of supernode.
+        int *llist,             ///< temporary linked list of eliminated nabors.
+        int *marker,            ///< marker vector.
+        int *maxint,            
+        ///< estimate of maximum representable (short) integer.
+        int *tag)               ///< tag value.
 {
   /* System generated locals */
   int i__1, i__2;
@@ -367,19 +126,9 @@ mmdelm_ (int *mdnode, int *xadj, int *adjncy, int *dhead, int *dforw,
     0, nxnode = 0, pvnode = 0, nqnbrs = 0, npv = 0;
 
 
-/* *************************************************************** */
-
-/*         INTEGER*2  ADJNCY(1), DBAKW(1) , DFORW(1) , DHEAD(1) , */
-/*     1              LLIST(1) , MARKER(1), QSIZE(1) */
-
-/* *************************************************************** */
-
 /*        ----------------------------------------------- */
 /*        FIND REACHABLE SET AND PLACE IN DATA STRUCTURE. */
 /*        ----------------------------------------------- */
-  /* Parameter adjustments */
-  //--marker; --llist; --qsize; --dbakw; --dforw; --dhead;
-  //--adjncy; --xadj;
 
   /* Function Body */
   marker[*mdnode] = *tag;
@@ -592,14 +341,11 @@ L1100:
       ;
     }
 L1800:
-  return 0;
+  return;
+}
 
-}                               /* mmdelm_ */
-
-/* *************************************************************** */
 /* *************************************************************** */
 /* *****     MMDUPD ..... MULTIPLE MINIMUM DEGREE UPDATE     ***** */
-/* *************************************************************** */
 /* *************************************************************** */
 
 /*     AUTHOR - JOSEPH W.H. LIU */
@@ -627,10 +373,27 @@ L1800:
 
 /* *************************************************************** */
 
-static int
-mmdupd_ (int *ehead, int *neqns, int *xadj, int *adjncy, int *delta,
-         int *mdeg, int *dhead, int *dforw, int *dbakw, int *qsize,
-         int *llist, int *marker, int *maxint, int *tag)
+/**
+ * function to update the degrees of nodes after a multiple elimination step.
+ */
+static inline int
+mmdupd (int *ehead,
+        ///< the beginning of the list of eliminated nodes (i.e., newly formed
+        ///< elements).
+        int *neqns,             ///< number of equations.
+        int *xadj,
+        int *adjncy,            ///< adjacency structure.
+        int *delta,             ///< tolerance value for multiple elimination.
+        int *mdeg,              ///< new minimum degree after degree update.
+        int *dhead,
+        int *dforw,
+        int *dbakw,             ///< degree double linked structure.
+        int *qsize,             ///< size of supernode.
+        int *llist,             ///< working linked list.
+        int *marker,            ///< marker vector for degree update.
+        int *maxint,
+        ///< maximum machine representable (short) integer.
+        int *tag)               ///< tag value.
 {
   /* System generated locals */
   int i__1, i__2;
@@ -639,18 +402,6 @@ mmdupd_ (int *ehead, int *neqns, int *xadj, int *adjncy, int *delta,
   int node = 0, mtag = 0, link = 0, mdeg0 = 0, i = 0, j = 0, enode = 0, fnode =
     0, nabor = 0, elmnt = 0, istop = 0, jstop = 0, q2head = 0, istrt =
     0, jstrt = 0, qxhead = 0, iq2 = 0, deg = 0, deg0 = 0;
-
-
-/* *************************************************************** */
-
-/*         INTEGER*2  ADJNCY(1), DBAKW(1) , DFORW(1) , DHEAD(1) , */
-/*     1              LLIST(1) , MARKER(1), QSIZE(1) */
-
-/* *************************************************************** */
-
-  /* Parameter adjustments */
-  //--marker; --llist; --qsize; --dbakw; --dforw; --dhead;
-  //--adjncy; --xadj;
 
   /* Function Body */
   mdeg0 = *mdeg + *delta;
@@ -977,12 +728,10 @@ L2300:
   elmnt = llist[elmnt];
   goto L100;
 
-}                               /* mmdupd_ */
+}
 
 /* *************************************************************** */
-/* *************************************************************** */
 /* *****     MMDNUM ..... MULTI MINIMUM DEGREE NUMBERING     ***** */
-/* *************************************************************** */
 /* *************************************************************** */
 
 /*     AUTHOR - JOSEPH W.H. LIU */
@@ -1008,24 +757,25 @@ L2300:
 
 /* *************************************************************** */
 
-static int
-mmdnum_ (int *neqns, int *perm, int *invp, int *qsize)
+/**
+ * function to perform the final step in producint the permutation and inverse
+ * permutation vectors in the multiple elimination version of the minimum degree
+ * ordering algorithm.
+ */
+static inline void
+mmdnum (int *neqns,             ///< number of equations.
+        int *perm,              ///< the permutation vector.
+        int *invp,
+        ///< inverse permutation vector. On input, if qsize(node)=0, then node
+        ///< has been merged into the node -invp(node); otherwise, -invp(node)
+        ///< is its inverse labelling.
+        int *qsize)             ///< size of supernodes at elimination.
 {
   /* System generated locals */
   int i__1;
 
   /* Local variables */
   int node = 0, root = 0, nextf = 0, father = 0, nqsize = 0, num = 0;
-
-
-/* *************************************************************** */
-
-/*         INTEGER*2  INVP(1)  , PERM(1)  , QSIZE(1) */
-
-/* *************************************************************** */
-
-  /* Parameter adjustments */
-  //--qsize; --invp; --perm;
 
   /* Function Body */
   i__1 = *neqns;
@@ -1040,7 +790,6 @@ mmdnum_ (int *neqns, int *perm, int *invp, int *qsize)
         {
           perm[node] = -invp[node];
         }
-/* L100: */
     }
 /*        ------------------------------------------------------ */
 /*        FOR EACH NODE WHICH HAS BEEN MERGED, DO THE FOLLOWING. */
@@ -1097,8 +846,217 @@ mmdnum_ (int *neqns, int *perm, int *invp, int *qsize)
       num = -invp[node];
       invp[node] = num;
       perm[num] = node;
-/* L600: */
     }
-  return 0;
 
-}                               /* mmdnum_ */
+}
+
+/* *************************************************************** */
+/* ****     GENMMD ..... MULTIPLE MINIMUM EXTERNAL DEGREE     **** */
+/* *************************************************************** */
+
+/*     AUTHOR - JOSEPH W.H. LIU */
+/*              DEPT OF COMPUTER SCIENCE, YORK UNIVERSITY. */
+
+/*     PURPOSE - THIS ROUTINE IMPLEMENTS THE MINIMUM DEGREE */
+/*        ALGORITHM.  IT MAKES USE OF THE IMPLICIT REPRESENTATION */
+/*        OF ELIMINATION GRAPHS BY QUOTIENT GRAPHS, AND THE */
+/*        NOTION OF INDISTINGUISHABLE NODES.  IT ALSO IMPLEMENTS */
+/*        THE MODIFICATIONS BY MULTIPLE ELIMINATION AND MINIMUM */
+/*        EXTERNAL DEGREE. */
+/*        --------------------------------------------- */
+/*        CAUTION - THE ADJACENCY VECTOR ADJNCY WILL BE */
+/*        DESTROYED. */
+/*        --------------------------------------------- */
+
+/*     INPUT PARAMETERS - */
+/*        NEQNS  - NUMBER OF EQUATIONS. */
+/*        (XADJ,ADJNCY) - THE ADJACENCY STRUCTURE. */
+/*        DELTA  - TOLERANCE VALUE FOR MULTIPLE ELIMINATION. */
+/*        MAXINT - MAXIMUM MACHINE REPRESENTABLE (SHORT) INTEGER */
+/*                 (ANY SMALLER ESTIMATE WILL DO) FOR MARKING */
+/*                 NODES. */
+
+/*     OUTPUT PARAMETERS - */
+/*        PERM   - THE MINIMUM DEGREE ORDERING. */
+/*        INVP   - THE INVERSE OF PERM. */
+/*        NOFSUB - AN UPPER BOUND ON THE NUMBER OF NONZERO */
+/*                 SUBSCRIPTS FOR THE COMPRESSED STORAGE SCHEME. */
+
+/*     WORKING PARAMETERS - */
+/*        DHEAD  - VECTOR FOR HEAD OF DEGREE LISTS. */
+/*        INVP   - USED TEMPORARILY FOR DEGREE FORWARD LINK. */
+/*        PERM   - USED TEMPORARILY FOR DEGREE BACKWARD LINK. */
+/*        QSIZE  - VECTOR FOR SIZE OF SUPERNODES. */
+/*        LLIST  - VECTOR FOR TEMPORARY LINKED LISTS. */
+/*        MARKER - A TEMPORARY MARKER VECTOR. */
+
+/*     PROGRAM SUBROUTINES - */
+/*        MMDELM, MMDINT, MMDNUM, MMDUPD. */
+
+/* *************************************************************** */
+
+/**
+ * function to implement the minimum degree algorithm. It makes use of the
+ * implicit representation of elimination graphs by quotient graphs, and the
+ * notion of indistiguishable nodes. It aso implements the modifications by
+ * multiple elimination and minimum external degree. Caution! the adjacency
+ * vector adjncy will be destroyed.
+ */
+void
+genmmd (int *neqns,             ///< number of equations.
+        int *xadj,
+        int *adjncy,            ///< the adjacency structure.
+        int *invp,              ///< the inverse of perm.
+        int *perm,              ///< the minimum degree ordering.
+        int *delta,             ///< tolerance value for multiple elimination.
+        int *dhead,             ///< vector for head of degree lists.
+        int *qsize,             ///< vector for size of supernodes.
+        int *llist,             ///< vector for temporary linked lists.
+        int *marker,            ///< a temporary marker vector.
+        int *maxint,
+        ///< maximum machine representable (short) integer (and smaller
+        ///< estimate will do) for marking nodes.
+        int *nofsub)
+        ///< an upper bound on the numer of non-zero subscripts for the
+        ///< compressed storage scheme.
+{
+  /* System generated locals */
+  int i__1;
+
+  /* Local variables */
+  int mdeg = 0, ehead = 0, i = 0, mdlmt = 0, mdnode = 0;
+  int nextmd = 0, tag = 0, num = 0;
+
+  /* Function Body */
+  if (*neqns <= 0)
+    {
+      return;
+    }
+
+/*        ------------------------------------------------ */
+/*        INITIALIZATION FOR THE MINIMUM DEGREE ALGORITHM. */
+/*        ------------------------------------------------ */
+  *nofsub = 0;
+  mmdint (neqns, xadj, dhead, invp, perm, qsize, llist, marker);
+
+/*        ---------------------------------------------- */
+/*        NUM COUNTS THE NUMBER OF ORDERED NODES PLUS 1. */
+/*        ---------------------------------------------- */
+  num = 1;
+
+/*        ----------------------------- */
+/*        ELIMINATE ALL ISOLATED NODES. */
+/*        ----------------------------- */
+  nextmd = dhead[1];
+L100:
+  if (nextmd <= 0)
+    {
+      goto L200;
+    }
+  mdnode = nextmd;
+  nextmd = invp[mdnode];
+  marker[mdnode] = *maxint;
+  invp[mdnode] = -num;
+  ++num;
+  goto L100;
+
+L200:
+/*        ---------------------------------------- */
+/*        SEARCH FOR NODE OF THE MINIMUM DEGREE. */
+/*        MDEG IS THE CURRENT MINIMUM DEGREE; */
+/*        TAG IS USED TO FACILITATE MARKING NODES. */
+/*        ---------------------------------------- */
+  if (num > *neqns)
+    {
+      goto L1000;
+    }
+  tag = 1;
+  dhead[1] = 0;
+  mdeg = 2;
+L300:
+  if (dhead[mdeg] > 0)
+    {
+      goto L400;
+    }
+  ++mdeg;
+  goto L300;
+L400:
+/*            ------------------------------------------------- */
+/*            USE VALUE OF DELTA TO SET UP MDLMT, WHICH GOVERNS */
+/*            WHEN A DEGREE UPDATE IS TO BE PERFORMED. */
+/*            ------------------------------------------------- */
+  mdlmt = mdeg + *delta;
+  ehead = 0;
+
+L500:
+  mdnode = dhead[mdeg];
+  if (mdnode > 0)
+    {
+      goto L600;
+    }
+  ++mdeg;
+  if (mdeg > mdlmt)
+    {
+      goto L900;
+    }
+  goto L500;
+L600:
+/*                ---------------------------------------- */
+/*                REMOVE MDNODE FROM THE DEGREE STRUCTURE. */
+/*                ---------------------------------------- */
+  nextmd = invp[mdnode];
+  dhead[mdeg] = nextmd;
+  if (nextmd > 0)
+    {
+      perm[nextmd] = -mdeg;
+    }
+  invp[mdnode] = -num;
+  *nofsub = *nofsub + mdeg + qsize[mdnode] - 2;
+  if (num + qsize[mdnode] > *neqns)
+    {
+      goto L1000;
+    }
+/*                ---------------------------------------------- */
+/*                ELIMINATE MDNODE AND PERFORM QUOTIENT GRAPH */
+/*                TRANSFORMATION.  RESET TAG VALUE IF NECESSARY. */
+/*                ---------------------------------------------- */
+  ++tag;
+  if (tag < *maxint)
+    {
+      goto L800;
+    }
+  tag = 1;
+  i__1 = *neqns;
+  for (i = 1; i <= i__1; ++i)
+    {
+      if (marker[i] < *maxint)
+        {
+          marker[i] = 0;
+        }
+    }
+L800:
+  mmdelm (&mdnode, xadj, adjncy, dhead, invp, perm, qsize, llist,
+           marker, maxint, &tag);
+  num += qsize[mdnode];
+  llist[mdnode] = ehead;
+  ehead = mdnode;
+  if (*delta >= 0)
+    {
+      goto L500;
+    }
+L900:
+/*            ------------------------------------------- */
+/*            UPDATE DEGREES OF THE NODES INVOLVED IN THE */
+/*            MINIMUM DEGREE NODES ELIMINATION. */
+/*            ------------------------------------------- */
+  if (num > *neqns)
+    {
+      goto L1000;
+    }
+  mmdupd (&ehead, neqns, xadj, adjncy, delta, &mdeg, dhead,
+           invp, perm, qsize, llist, marker, maxint, &tag);
+  goto L300;
+
+L1000:
+  mmdnum (neqns, perm, invp, qsize);
+}

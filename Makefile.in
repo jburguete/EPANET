@@ -36,6 +36,7 @@ epanet2_h = $(INC)epanet2.h $(INC)epanet2_enums.h
 enumstxt_h = $(SRC)enumstxt.h
 errors_h = $(SRC)errors.dat
 funcs_h = $(SRC)funcs.h
+genmmd_h = $(SRC)genmmd.h
 mempool_h = $(SRC)mempool.h
 smatrix_h = $(SRC)smatrix.h
 text_h = $(SRC)text.h
@@ -108,7 +109,7 @@ epanet_dep_pgo = $(epanet_c) $(epanet_h) $(types_h) $(funcs_h) $(text_h) \
 	$(enumstxt_h) Makefile
 epanet2_dep_pgo = $(epanet2_c) $(types_h) $(funcs_h) $(epanet2_h) $(epanet_h) \
 	Makefile
-genmmd_dep_pgo = $(genmmd_c) Makefile
+genmmd_dep_pgo = $(genmmd_c) $(genmmd_h) Makefile
 hydcoeffs_dep_pgo = $(hydcoeffs_c) $(types_h) $(funcs_h) Makefile
 hydraul_dep_pgo = $(hydraul_c) $(types_h) $(funcs_h) $(text_h) $(smatrix_h) \
 	Makefile
@@ -129,7 +130,7 @@ qualroute_dep_pgo = $(qualroute_c) $(mempool_h) $(types_h) Makefile
 report_dep_pgo = $(report_c) $(text_h) $(types_h) $(funcs_h) $(vars_h) Makefile
 rules_dep_pgo = $(rules_c) $(text_h) $(types_h) $(funcs_h) $(vars_h) Makefile
 smatrix_dep_pgo = $(smatrix_c) $(text_h) $(types_h) $(funcs_h) $(vars_h) \
-	$(smatrix_h) Makefile
+	$(genmmd_h) $(smatrix_h) Makefile
 
 ifeq ($(PGO), 1)
 	epanet_dep = $(epanetpgo_exe)

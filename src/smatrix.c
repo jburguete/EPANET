@@ -25,12 +25,8 @@
 #include "text.h"
 #include "types.h"
 #include "funcs.h"
+#include "genmmd.h"
 #include "smatrix.h"
-
-// The multiple minimum degree re-ordering routine (see genmmd.c)
-extern int genmmd (int *neqns, int *xadj, int *adjncy, int *invp, int *perm,
-                   int *delta, int *dhead, int *qsize, int *llist, int *marker,
-                   int *maxint, int *nofsub);
 
 /**
  * function to allocate memory for representing a sparse matrix.
