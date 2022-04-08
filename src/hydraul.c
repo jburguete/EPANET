@@ -20,12 +20,11 @@
 #include "types.h"
 #include "funcs.h"
 #include "text.h"
+#include "smatrix.h"
 
 const double QZERO = 1.e-6;  // Equivalent to zero flow in cfs
 
 // Imported functions
-extern int  createsparse(Project *);
-extern void freesparse(Project *);
 extern int  hydsolve(Project *, int *, double *);
 
 // Local functions
@@ -59,7 +58,7 @@ int  openhyd(Project *pr)
     else if (pr->network.Ntanks == 0) errcode = 224;
 
     // Allocate memory for sparse matrix structures (see SMATRIX.C)
-    ERRCODE(createsparse(pr));
+    ERRCODE(createsparse(&pr->network, &pr->hydraul.smatrix));
 
     // Allocate memory for hydraulic variables
     ERRCODE(allocmatrix(pr));
@@ -285,7 +284,7 @@ void  closehyd(Project *pr)
 **--------------------------------------------------------------
 */
 {
-    freesparse(pr);
+    freesparse(&pr->hydraul.smatrix);
     freematrix(pr);
 }
 

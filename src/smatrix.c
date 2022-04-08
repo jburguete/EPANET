@@ -1,23 +1,19 @@
-/*
- ******************************************************************************
- Project:      OWA EPANET
- Version:      2.2
- Module:       smatrix.c
- Description:  solves a sparse set of linear equations
- Authors:      see AUTHORS
- Copyright:    see AUTHORS
- License:      see LICENSE
- Last Updated: 05/15/2019
- ******************************************************************************
+/**
+ * \file smatrix.c
+ * \brief Source file to solve a sparse set of linear equations.
+ * \authors see AUTHORS.
+ * \copyright see AUTHORS.
+ * 
+ * This file contains the sparse matrix routines used to solve a network's
+ * hydraulic equations. The functions exported by this module are:
+ *
+ * createsparse() -- called from openhyd() in hydraul.c,
+ * 
+ * freesparse()   -- called from closehyd() in hydraul.c,
+ * 
+ * linsolve()     -- called from hydsolve() in hydsolver.c.
+ * 
 */
-/*
- This module contains the sparse matrix routines used to solve a network's
- hydraulic equations. The functions exported by this module are:
-   createsparse() -- called from openhyd() in HYDRAUL.C
-   freesparse()   -- called from closehyd() in HYDRAUL.C
-   linsolve()     -- called from netsolve() in HYDRAUL.C
-*/
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -29,112 +25,20 @@
 #include "text.h"
 #include "types.h"
 #include "funcs.h"
+#include "smatrix.h"
 
 // The multiple minimum degree re-ordering routine (see genmmd.c)
 extern int genmmd(int *neqns, int *xadj, int *adjncy, int *invp, int *perm,
                   int *delta, int *dhead, int *qsize, int *llist, int *marker,
                   int *maxint, int *nofsub);
 
-// Exported functions
-int  createsparse(Project *);
-void freesparse(Project *);
-int  linsolve(Smatrix *, int);
-
-// Local functions
-static int     allocsmatrix(Smatrix *, int, int);
-static int     alloclinsolve(Smatrix *, int);
-static int     localadjlists(Network *, Smatrix *);
-static int     paralink(Network *, Smatrix *, int, int, int k);
-static void    xparalinks(Network *);
-static int     reordernodes(Project *);
-static int     factorize(Project *);
-static int     growlist(Project *, int);
-static int     newlink(Project *, Padjlist);
-static int     linked(Network *, int, int);
-static int     addlink(Network *, int, int, int);
-static int     storesparse(Project *, int);
-static int     sortsparse(Smatrix *, int);
-static void    transpose(int, int *, int *, int *, int *,
-                         int *, int *, int *);
-
-
-/*************************************************************************
-* Timer macros
-**************************************************************************/
- //#define cleartimer(tmr) (tmr = 0.0)
- //#define starttimer(tmr) (tmr -= ((double) clock()/CLOCKS_PER_SEC));
- //#define stoptimer(tmr)  (tmr += ((double) clock()/CLOCKS_PER_SEC));
- //#define gettimer(tmr)   (tmr)
-
-
-/*************************************************************************
-* The following data type implements a timer
-**************************************************************************/
-// typedef double timer;
-// timer    SmatrixTimer;
-
-
-int  createsparse(Project *pr)
-/*
-**--------------------------------------------------------------
-** Input:   none
-** Output:  returns error code
-** Purpose: creates sparse representation of coeff. matrix
-**--------------------------------------------------------------
-*/
-{
-    Network *net = &pr->network;
-    Smatrix *sm = &pr->hydraul.smatrix;
-
-    int errcode = 0;
-
-//    cleartimer(SmatrixTimer);
-//    starttimer(SmatrixTimer);
-
-    // Allocate sparse matrix data structures
-    errcode = allocsmatrix(sm, net->Nnodes, net->Nlinks);
-    if (errcode) return errcode;
-
-    // Build a local version of node-link adjacency lists
-    // with parallel links removed
-    errcode = localadjlists(net, sm);
-    if (errcode) return errcode;
-
-    // Re-order nodes to minimize number of non-zero coeffs.
-    // in factorized solution matrix
-    ERRCODE(reordernodes(pr));
-
-    // Factorize solution matrix by updating adjacency lists
-    // with non-zero connections due to fill-ins
-    sm->Ncoeffs = net->Nlinks;
-    ERRCODE(factorize(pr));
-
-    // Allocate memory for sparse storage of positions of non-zero
-    // coeffs. and store these positions in vector NZSUB
-    ERRCODE(storesparse(pr, net->Njuncs));
-
-    // Free memory used for local adjacency lists and sort
-    // row indexes in NZSUB to optimize linsolve()
-    freeadjlists(net);
-    ERRCODE(sortsparse(sm, net->Njuncs));
-
-    // Allocate memory used by linear eqn. solver
-    ERRCODE(alloclinsolve(sm, net->Nnodes));
-
-    // Re-build adjacency lists for future use
-    ERRCODE(buildadjlists(net));
-    return errcode;
-}
-
-
-int  allocsmatrix(Smatrix *sm, int Nnodes, int Nlinks)
-/*
-**--------------------------------------------------------------
-** Input:   none
-** Output:  returns error code
-** Purpose: allocates memory for representing a sparse matrix
-**--------------------------------------------------------------
-*/
+/**
+ * function to allocate memory for representing a sparse matrix.
+ *
+ * \return error code.
+ */
+static inline int  allocsmatrix(Smatrix *sm,   ///< sparse matrix struct.
+                                int Nnodes, int Nlinks)
 {
     int errcode = 0;
 
@@ -156,15 +60,13 @@ int  allocsmatrix(Smatrix *sm, int Nnodes, int Nlinks)
     return errcode;
 }
 
-
-int  alloclinsolve(Smatrix *sm, int n)
-/*
-**--------------------------------------------------------------
-** Input:   none
-** Output:  returns error code
-** Purpose: allocates memory used by linear eqn. solver.
-**--------------------------------------------------------------
-*/
+/**
+ * function to allocate memory used by linear eqn. solver.
+ *
+ * \return error code.
+ */
+static inline int  alloclinsolve(Smatrix *sm,   ///< sparse matrix struct.
+                                 int n)
 {
     int errcode = 0;
     n = n + 1;    // All arrays are 1-based
@@ -184,47 +86,80 @@ int  alloclinsolve(Smatrix *sm, int n)
     return errcode;
 }
 
-
-void  freesparse(Project *pr)
-/*
-**----------------------------------------------------------------
-** Input:   None
-** Output:  None
-** Purpose: Frees memory used for sparse matrix storage
-**----------------------------------------------------------------
-*/
+/**
+ * function to remove parallel links from nodal adjacency lists.
+ */
+static inline void  xparalinks(Padjlist *Adjlist, int Nnodes)
 {
-    Smatrix *sm = &pr->hydraul.smatrix;
+    int    i;
+    Padjlist    alink,       // Current item in adjacency list
+                blink;       // Previous item in adjacency list
 
-//    stoptimer(SmatrixTimer);
-//    printf("\n");
-//    printf("\n    Processing Time = %7.3f s", gettimer(SmatrixTimer));
-//    printf("\n");
-
-    FREE(sm->Order);
-    FREE(sm->Row);
-    FREE(sm->Ndx);
-    FREE(sm->XLNZ);
-    FREE(sm->NZSUB);
-    FREE(sm->LNZ);
-
-    FREE(sm->Aij);
-    FREE(sm->Aii);
-    FREE(sm->F);
-    FREE(sm->temp);
-    FREE(sm->link);
-    FREE(sm->first);
+    // Scan adjacency list of each node
+    for (i = 1; i <= Nnodes; i++)
+    {
+        alink = Adjlist[i];               // First item in list
+        blink = NULL;
+        while (alink != NULL)
+        {
+            if (alink->node == 0)              // Parallel link marker found
+            {
+                if (blink == NULL)             // This holds at start of list
+                {
+                    Adjlist[i] = alink->next;
+                    free(alink);                // Remove item from list
+                    alink = Adjlist[i];
+                }
+                else                           // This holds for interior of list
+                {
+                    blink->next = alink->next;
+                    free(alink);                // Remove item from list
+                    alink = blink->next;
+                }
+            }
+            else
+            {
+                blink = alink;                // Move to next item in list
+                alink = alink->next;
+            }
+        }
+    }
 }
 
+/**
+ * function to check for parallel links between nodes i and j.
+ *
+ * \return 1 if link k parallels another link, else 0.
+ */
+static inline int  paralink(Padjlist *Adjlist,
+                            Smatrix *sm,   ///< sparse matrix struct.
+                            int i,      ///< index of start node of link.
+                            int j,      ///< index of end node of link.
+                            int k)      ///< link index.
+{
+    Padjlist alink;
+    for (alink = Adjlist[i]; alink != NULL; alink = alink->next)
+    {
+        // Link || to k (same end nodes)
+        if (alink->node == j)
+        {
+            // Assign Ndx entry to this link
+            sm->Ndx[k] = alink->link;
+            return(1);
+        }
+    }
+    // Ndx entry if link not parallel
+    sm->Ndx[k] = k;
+    return(0);
+}
 
-int  localadjlists(Network *net, Smatrix *sm)
-/*
-**--------------------------------------------------------------
-** Input:   none
-** Output:  returns error code
-** Purpose: builds linked list of non-parallel links adjacent to each node
-**--------------------------------------------------------------
-*/
+/**
+ * function to build linked list of non-parallel links adjacent to each node.
+ *
+ * \return error code.
+ */
+static inline int  localadjlists(Network *net,
+                                 Smatrix *sm)   ///< sparse matrix struct.
 {
     int    i, j, k;
     int    pmark = 0;     // parallel link marker
@@ -241,7 +176,7 @@ int  localadjlists(Network *net, Smatrix *sm)
     {
         i = net->Link[k].N1;
         j = net->Link[k].N2;
-        pmark = paralink(net, sm, i, j, k);  // Parallel link check
+        pmark = paralink(net->Adjlist, sm, i, j, k);  // Parallel link check
 
         // Include link in start node i's list
         alink = (struct Sadjlist *) malloc(sizeof(struct Sadjlist));
@@ -263,98 +198,19 @@ int  localadjlists(Network *net, Smatrix *sm)
     }
 
     // Remove parallel links from adjacency lists
-    xparalinks(net);
+    xparalinks(net->Adjlist, net->Nnodes);
     return errcode;
 }
 
-
-int  paralink(Network *net, Smatrix *sm, int i, int j, int k)
-/*
-**--------------------------------------------------------------
-** Input:   i = index of start node of link
-**          j = index of end node of link
-**          k = link index
-** Output:  returns 1 if link k parallels another link, else 0
-** Purpose: checks for parallel links between nodes i and j
-**
-**--------------------------------------------------------------
-*/
+/**
+ * function to re-order nodes to minimize # of non-zeros that will appear in
+ * factorized solution matrix.
+ *
+ * \return 1 if successful, 0 if not.
+ */
+static inline int reordernodes(Network *net,
+                               Smatrix *sm)   ///< sparse matrix struct.
 {
-    Padjlist alink;
-    for (alink = net->Adjlist[i]; alink != NULL; alink = alink->next)
-    {
-        // Link || to k (same end nodes)
-        if (alink->node == j)
-        {
-            // Assign Ndx entry to this link
-            sm->Ndx[k] = alink->link;
-            return(1);
-        }
-    }
-    // Ndx entry if link not parallel
-    sm->Ndx[k] = k;
-    return(0);
-}
-
-
-void  xparalinks(Network *net)
-/*
-**--------------------------------------------------------------
-** Input:   none
-** Output:  none
-** Purpose: removes parallel links from nodal adjacency lists
-**--------------------------------------------------------------
-*/
-{
-    int    i;
-    Padjlist    alink,       // Current item in adjacency list
-                blink;       // Previous item in adjacency list
-
-    // Scan adjacency list of each node
-    for (i = 1; i <= net->Nnodes; i++)
-    {
-        alink = net->Adjlist[i];               // First item in list
-        blink = NULL;
-        while (alink != NULL)
-        {
-            if (alink->node == 0)              // Parallel link marker found
-            {
-                if (blink == NULL)             // This holds at start of list
-                {
-                    net->Adjlist[i] = alink->next;
-                    free(alink);                // Remove item from list
-                    alink = net->Adjlist[i];
-                }
-                else                           // This holds for interior of list
-                {
-                    blink->next = alink->next;
-                    free(alink);                // Remove item from list
-                    alink = blink->next;
-                }
-            }
-            else
-            {
-                blink = alink;                // Move to next item in list
-                alink = alink->next;
-            }
-        }
-    }
-}
-
-
-int   reordernodes(Project *pr)
-/*
-**--------------------------------------------------------------
-** Input:   none
-** Output:  returns 1 if successful, 0 if not
-** Purpose: re-orders nodes to minimize # of non-zeros that
-**          will appear in factorized solution matrix
-**--------------------------------------------------------------
-*/
-{
-    Network *net = &pr->network;
-    Smatrix *sm = &pr->hydraul.smatrix;
-
     int k, knode, m, njuncs, nlinks;
     int delta = -1;
     int nofsub = 0;
@@ -424,20 +280,124 @@ int   reordernodes(Project *pr)
     return errcode;
 }
 
-
-int factorize(Project *pr)
-/*
-**--------------------------------------------------------------
-** Input:   none
-** Output:  returns error code
-** Purpose: symbolically factorizes the solution matrix in
-**          terms of its adjacency lists
-**--------------------------------------------------------------
+/**
+ * function to check if nodes i and j are already linked.
+ *
+ * \return 1 if nodes i and j are linked, 0 if not.
 */
+static inline int linked(Padjlist * Adjlist,
+                         int i, ///< node index
+                         int j) ///< node index
 {
-    Network *net = &pr->network;
-    Smatrix *sm = &pr->hydraul.smatrix;
+    Padjlist alink;
+    for (alink = Adjlist[i]; alink != NULL; alink = alink->next)
+    {
+        if (alink->node == j) return 1;
+    }
+    return 0;
+}
 
+/**
+ * function to augment node i's adjacency list with node j.
+ *
+ * \return 1 if successful, 0 if not.
+*/
+static int  addlink(Padjlist * Adjlist,
+                    int i,      ///< node index.
+                    int j,      ///< node index.
+                    int n)      ///< link index.
+{
+    Padjlist alink;
+    alink = (struct Sadjlist *) malloc(sizeof(struct Sadjlist));
+    if (alink == NULL) return 0;
+    alink->node = j;
+    alink->link = n;
+    alink->next = Adjlist[i];
+    Adjlist[i] = alink;
+    return 1;
+}
+
+/**
+ * function to link end of current adjacent link to end nodes of all links that
+ * follow it on adjacency list.
+ *
+ * \return 1 if successful, 0 if not.
+ */
+static inline int  newlink(Padjlist *Adjlist,
+                           Smatrix *sm,   ///< sparse matrix struct.
+                           Padjlist alink)
+                           ///< element of node's adjacency list.
+{
+    int inode, jnode;
+    Padjlist blink;
+
+    // Scan all entries in adjacency list that follow anode.
+    inode = alink->node;             // End node of connection to anode
+    for (blink = alink->next; blink != NULL; blink = blink->next)
+    {
+        jnode = blink->node;          // End node of next connection
+
+        // If jnode still active, and inode not connected to jnode,
+        // then add a new connection between inode and jnode.
+        if (jnode > 0 && sm->Degree[jnode] > 0)  // jnode still active
+        {
+            if (!linked(Adjlist, inode, jnode))      // inode not linked to jnode
+            {
+                // Since new connection represents a non-zero coeff.
+                // in the solution matrix, update the coeff. count.
+                sm->Ncoeffs++;
+
+                // Update adjacency lists for inode & jnode to
+                // reflect the new connection.
+                if (!addlink(Adjlist, inode, jnode, sm->Ncoeffs)) return 0;
+                if (!addlink(Adjlist, jnode, inode, sm->Ncoeffs)) return 0;
+                sm->Degree[inode]++;
+                sm->Degree[jnode]++;
+            }
+        }
+    }
+    return 1;
+}
+
+/**
+ * function to create new entries in knode's adjacency list for all unlinked
+ * pairs of active nodes that are adjacent to knode.
+ *
+ * \return 1 if successful, 0 if not.
+ */
+static inline int  growlist(Network * net,
+                            Smatrix * sm,   ///< sparse matrix struct.
+                            int knode)  ///< node index.
+{
+
+    int node;
+    Padjlist alink;
+
+    // Iterate through all nodes connected to knode
+    for (alink = net->Adjlist[knode]; alink != NULL; alink = alink -> next)
+    {
+        node = alink->node;                   // End node of connecting link
+        if (node > 0 && sm->Degree[node] > 0) // End node is active
+        {
+            sm->Degree[node]--;           // Reduce degree of adjacency
+            if (!newlink(net->Adjlist, sm, alink))      // Add to adjacency list
+            {
+                return 0;
+            }
+        }
+  }
+  return 1;
+}
+
+/**
+ * function to symbolically factorize the solution matrix in terms of its
+ * adjacency lists.
+ *
+ * \return error code.
+*/
+static inline int factorize(Network * net,
+                            Smatrix * sm)   ///< sparse matrix struct.
+{
     int k, knode;
     int errcode = 0;
     Padjlist alink;
@@ -463,7 +423,7 @@ int factorize(Project *pr)
     for (k = 1; k <= net->Njuncs; k++)          // Examine each junction
     {
         knode = sm->Order[k];                   // Re-ordered index
-        if (!growlist(pr, knode))               // Augment adjacency list
+        if (!growlist(net, sm, knode))               // Augment adjacency list
         {
             errcode = 101;
             break;
@@ -474,140 +434,16 @@ int factorize(Project *pr)
     return errcode;
 }
 
-
-int  growlist(Project *pr, int knode)
-/*
-**--------------------------------------------------------------
-** Input:   knode = node index
-** Output:  returns 1 if successful, 0 if not
-** Purpose: creates new entries in knode's adjacency list for
-**          all unlinked pairs of active nodes that are
-**          adjacent to knode
-**--------------------------------------------------------------
+/**
+ * function to store row indexes of non-zeros of each column of lower triangular
+ * portion of factorized matrix.
+ *
+ * \return error code.
 */
+static inline int  storesparse(Network * net,
+                               Smatrix * sm,   ///< sparse matrix struct.
+                               int n)   ///< number of rows in solution matrix.
 {
-    Network *net = &pr->network;
-    Smatrix *sm = &pr->hydraul.smatrix;
-
-    int node;
-    Padjlist alink;
-
-    // Iterate through all nodes connected to knode
-    for (alink = net->Adjlist[knode]; alink != NULL; alink = alink -> next)
-    {
-        node = alink->node;                   // End node of connecting link
-        if (node > 0 && sm->Degree[node] > 0) // End node is active
-        {
-            sm->Degree[node]--;           // Reduce degree of adjacency
-            if (!newlink(pr, alink))      // Add to adjacency list
-            {
-                return 0;
-            }
-        }
-  }
-  return 1;
-}
-
-
-int  newlink(Project *pr, Padjlist alink)
-/*
-**--------------------------------------------------------------
-** Input:   alink = element of node's adjacency list
-** Output:  returns 1 if successful, 0 if not
-** Purpose: links end of current adjacent link to end nodes of
-**          all links that follow it on adjacency list
-**--------------------------------------------------------------
-*/
-{
-    Network *net = &pr->network;
-    Smatrix *sm = &pr->hydraul.smatrix;
-
-    int inode, jnode;
-    Padjlist blink;
-
-    // Scan all entries in adjacency list that follow anode.
-    inode = alink->node;             // End node of connection to anode
-    for (blink = alink->next; blink != NULL; blink = blink->next)
-    {
-        jnode = blink->node;          // End node of next connection
-
-        // If jnode still active, and inode not connected to jnode,
-        // then add a new connection between inode and jnode.
-        if (jnode > 0 && sm->Degree[jnode] > 0)  // jnode still active
-        {
-            if (!linked(net, inode, jnode))      // inode not linked to jnode
-            {
-                // Since new connection represents a non-zero coeff.
-                // in the solution matrix, update the coeff. count.
-                sm->Ncoeffs++;
-
-                // Update adjacency lists for inode & jnode to
-                // reflect the new connection.
-                if (!addlink(net, inode, jnode, sm->Ncoeffs)) return 0;
-                if (!addlink(net, jnode, inode, sm->Ncoeffs)) return 0;
-                sm->Degree[inode]++;
-                sm->Degree[jnode]++;
-            }
-        }
-    }
-    return 1;
-}
-
-
-int  linked(Network *net, int i, int j)
-/*
-**--------------------------------------------------------------
-** Input:   i = node index
-**          j = node index
-** Output:  returns 1 if nodes i and j are linked, 0 if not
-** Purpose: checks if nodes i and j are already linked.
-**--------------------------------------------------------------
-*/
-{
-    Padjlist alink;
-    for (alink = net->Adjlist[i]; alink != NULL; alink = alink->next)
-    {
-        if (alink->node == j) return 1;
-    }
-    return 0;
-}
-
-
-int  addlink(Network *net, int i, int j, int n)
-/*
-**--------------------------------------------------------------
-** Input:   i = node index
-**          j = node index
-**          n = link index
-** Output:  returns 1 if successful, 0 if not
-** Purpose: augments node i's adjacency list with node j
-**--------------------------------------------------------------
-*/
-{
-    Padjlist alink;
-    alink = (struct Sadjlist *) malloc(sizeof(struct Sadjlist));
-    if (alink == NULL) return 0;
-    alink->node = j;
-    alink->link = n;
-    alink->next = net->Adjlist[i];
-    net->Adjlist[i] = alink;
-    return 1;
-}
-
-
-int  storesparse(Project *pr, int n)
-/*
-**--------------------------------------------------------------
-** Input:   n = number of rows in solution matrix
-** Output:  returns error code
-** Purpose: stores row indexes of non-zeros of each column of
-**          lower triangular portion of factorized matrix
-**--------------------------------------------------------------
-*/
-{
-    Network  *net = &pr->network;
-    Smatrix  *sm = &pr->hydraul.smatrix;
-
     int i, ii, j, k, l, m;
     int errcode = 0;
     Padjlist alink;
@@ -646,15 +482,42 @@ int  storesparse(Project *pr, int n)
     return errcode;
 }
 
-
-int  sortsparse(Smatrix *sm, int n)
-/*
-**--------------------------------------------------------------
-** Input:   n = number of rows in solution matrix
-** Output:  returns eror code
-** Purpose: puts row indexes in ascending order in NZSUB
-**--------------------------------------------------------------
+/**
+ * function to determine sparse storage scheme for transpose of a matrix.
 */
+static void transpose(int n,    ///< matrix order.
+                      int *il,
+                      int *jl,
+                      int *xl,  ///< sparse storage scheme for original matrix.
+                      int *ilt,
+                      int *jlt,
+                      int *xlt,
+                      ///< sparse storage scheme for transposed matrix.
+                      int *nzt)       ///< work array.
+{
+    int  i, j, k, kk;
+
+    for (i = 1; i <= n; i++) nzt[i] = 0;
+    for (i = 1; i <= n; i++)
+    {
+        for (k = il[i]; k < il[i+1]; k++)
+        {
+            j = jl[k];
+            kk = ilt[j] + nzt[j];
+            jlt[kk] = i;
+            xlt[kk] = xl[k];
+            nzt[j]++;
+        }
+    }
+}
+
+/**
+ * function to put row indexes in ascending order in NZSUB.
+ *
+ * \return eror code.
+ */
+static inline int sortsparse(Smatrix *sm,   ///< sparse matrix struct.
+                             int n)     ///< number of rows in solution matrix.
 {
     int  i, k;
     int  *xlnzt, *nzsubt, *lnzt, *nzt;
@@ -696,176 +559,50 @@ int  sortsparse(Smatrix *sm, int n)
     return errcode;
 }
 
-
-void  transpose(int n, int *il, int *jl, int *xl, int *ilt, int *jlt,
-                int *xlt, int *nzt)
-/*
-**---------------------------------------------------------------------
-** Input:   n = matrix order
-**          il,jl,xl = sparse storage scheme for original matrix
-**          nzt = work array
-** Output:  ilt,jlt,xlt = sparse storage scheme for transposed matrix
-** Purpose: Determines sparse storage scheme for transpose of a matrix
-**---------------------------------------------------------------------
-*/
+/**
+ * function to create sparse representation of coeff. matrix.
+ *
+ * \return error code.
+ */
+int  createsparse(Network * net,
+                  Smatrix * sm)   ///< sparse matrix struct.
 {
-    int  i, j, k, kk;
+    int errcode = 0;
 
-    for (i = 1; i <= n; i++) nzt[i] = 0;
-    for (i = 1; i <= n; i++)
-    {
-        for (k = il[i]; k < il[i+1]; k++)
-        {
-            j = jl[k];
-            kk = ilt[j] + nzt[j];
-            jlt[kk] = i;
-            xlt[kk] = xl[k];
-            nzt[j]++;
-        }
-    }
-}
+//    cleartimer(SmatrixTimer);
+//    starttimer(SmatrixTimer);
 
+    // Allocate sparse matrix data structures
+    errcode = allocsmatrix(sm, net->Nnodes, net->Nlinks);
+    if (errcode) return errcode;
 
-int  linsolve(Smatrix *sm, int n)
-/*
-**--------------------------------------------------------------
-** Input:   sm   = sparse matrix struct
-            n    = number of equations
-** Output:  sm->F = solution values
-**          returns 0 if solution found, or index of
-**          equation causing system to be ill-conditioned
-** Purpose: solves sparse symmetric system of linear
-**          equations using Cholesky factorization
-**
-** NOTE:   This procedure assumes that the solution matrix has
-**         been symbolically factorized with the positions of
-**         the lower triangular, off-diagonal, non-zero coeffs.
-**         stored in the following integer arrays:
-**            XLNZ  (start position of each column in NZSUB)
-**            NZSUB (row index of each non-zero in each column)
-**            LNZ   (position of each NZSUB entry in Aij array)
-**
-**  This procedure has been adapted from subroutines GSFCT and
-**  GSSLV in the book "Computer Solution of Large Sparse
-**  Positive Definite Systems" by A. George and J. W-H Liu
-**  (Prentice-Hall, 1981).
-**--------------------------------------------------------------
-*/
-{
-    double *Aii  = sm->Aii;
-    double *Aij  = sm->Aij;
-    double *B    = sm->F;
-    double *temp = sm->temp;
-    int *LNZ     = sm->LNZ;
-    int *XLNZ    = sm->XLNZ;
-    int *NZSUB   = sm->NZSUB;
-    int *link    = sm->link;
-    int *first   = sm->first;
+    // Build a local version of node-link adjacency lists
+    // with parallel links removed
+    errcode = localadjlists(net, sm);
+    if (errcode) return errcode;
 
-    int    i, istop, istrt, isub, j, k, kfirst, newk;
-    double bj, diagj, ljk;
+    // Re-order nodes to minimize number of non-zero coeffs.
+    // in factorized solution matrix
+    ERRCODE(reordernodes(net, sm));
 
-    memset(temp,  0, (n + 1) * sizeof(double));
-    memset(link,  0, (n + 1) * sizeof(int));
-    memset(first, 0, (n + 1) * sizeof(int));
+    // Factorize solution matrix by updating adjacency lists
+    // with non-zero connections due to fill-ins
+    sm->Ncoeffs = net->Nlinks;
+    ERRCODE(factorize(net, sm));
 
-   // Begin numerical factorization of matrix A into L
-   //   Compute column L(*,j) for j = 1,...n
-   for (j = 1; j <= n; j++)
-   {
-      // For each column L(*,k) that affects L(*,j):
-      diagj = 0.0;
-      newk = link[j];
-      k = newk;
-      while (k != 0)
-      {
-         // Outer product modification of L(*,j) by
-         // L(*,k) starting at first[k] of L(*,k)
-         newk = link[k];
-         kfirst = first[k];
-         ljk = Aij[LNZ[kfirst]];
-         diagj += ljk*ljk;
-         istrt = kfirst + 1;
-         istop = XLNZ[k+1] - 1;
-         if (istop >= istrt)
-         {
+    // Allocate memory for sparse storage of positions of non-zero
+    // coeffs. and store these positions in vector NZSUB
+    ERRCODE(storesparse(net, sm, net->Njuncs));
 
-	     // Before modification, update vectors 'first'
-	     // and 'link' for future modification steps
-            first[k] = istrt;
-            isub = NZSUB[istrt];
-            link[k] = link[isub];
-            link[isub] = k;
+    // Free memory used for local adjacency lists and sort
+    // row indexes in NZSUB to optimize linsolve()
+    freeadjlists(net);
+    ERRCODE(sortsparse(sm, net->Njuncs));
 
-	    // The actual mod is saved in vector 'temp'
-            for (i = istrt; i <= istop; i++)
-            {
-               isub = NZSUB[i];
-               temp[isub] += Aij[LNZ[i]]*ljk;
-            }
-         }
-         k = newk;
-      }
+    // Allocate memory used by linear eqn. solver
+    ERRCODE(alloclinsolve(sm, net->Nnodes));
 
-      // Apply the modifications accumulated
-      // in 'temp' to column L(*,j)
-      diagj = Aii[j] - diagj;
-      if (diagj <= 0.0)        // Check for ill-conditioning
-      {
-         return j;
-      }
-      diagj = sqrt(diagj);
-      Aii[j] = diagj;
-      istrt = XLNZ[j];
-      istop = XLNZ[j+1] - 1;
-      if (istop >= istrt)
-      {
-         first[j] = istrt;
-         isub = NZSUB[istrt];
-         link[j] = link[isub];
-         link[isub] = j;
-         for (i = istrt; i <= istop; i++)
-         {
-            isub = NZSUB[i];
-            bj = (Aij[LNZ[i]] - temp[isub])/diagj;
-            Aij[LNZ[i]] = bj;
-            temp[isub] = 0.0;
-         }
-      }
-   }      // next j
-
-   // Foward substitution
-   for (j = 1; j <= n; j++)
-   {
-      bj = B[j]/Aii[j];
-      B[j] = bj;
-      istrt = XLNZ[j];
-      istop = XLNZ[j+1] - 1;
-      if (istop >= istrt)
-      {
-         for (i = istrt; i <= istop; i++)
-         {
-            isub = NZSUB[i];
-            B[isub] -= Aij[LNZ[i]]*bj;
-         }
-      }
-   }
-
-   // Backward substitution
-   for (j = n; j >= 1; j--)
-   {
-      bj = B[j];
-      istrt = XLNZ[j];
-      istop = XLNZ[j+1] - 1;
-      if (istop >= istrt)
-      {
-         for (i = istrt; i <= istop; i++)
-         {
-            isub = NZSUB[i];
-            bj -= Aij[LNZ[i]]*B[isub];
-         }
-      }
-      B[j] = bj/Aii[j];
-   }
-   return 0;
+    // Re-build adjacency lists for future use
+    ERRCODE(buildadjlists(net));
+    return errcode;
 }

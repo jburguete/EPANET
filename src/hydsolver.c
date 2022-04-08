@@ -21,6 +21,7 @@
 #include "types.h"
 #include "funcs.h"
 #include "text.h"
+#include "smatrix.h"
 
 // Hydraulic balance error for network being analyzed
 typedef struct {
@@ -36,7 +37,6 @@ typedef struct {
 int  hydsolve(Project *, int *, double *);
 
 // Imported functions
-extern int  linsolve(Smatrix *, int);  //(see SMATRIX.C)
 extern int  valvestatus(Project *);    //(see HYDSTATUS.C)
 extern int  linkstatus(Project *);     //(see HYDSTATUS.C)
 
