@@ -374,8 +374,8 @@
 #define FMT26  "    Hydraulic Timestep ................ %-.2f %s"
 #define FMT27  "    Hydraulic Accuracy ................ %-.6f"
 
-#define FMT27a "    Status Check Frequency ............ %-d"                   
-#define FMT27b "    Maximum Trials Checked ............ %-d"                   
+#define FMT27a "    Status Check Frequency ............ %-d"
+#define FMT27b "    Maximum Trials Checked ............ %-d"
 #define FMT27c "    Damping Limit Threshold ........... %-.6f"
 
 #define FMT27d "    Headloss Error Limit .............. %-.6f %s"
@@ -417,8 +417,8 @@
 #define FMT58  "%10s: Balanced after %-d trials"
 #define FMT59  "%10s: Unbalanced after %-d trials (flow change = %-.6f)"
 
-#define FMT60a "            Max. flow imbalance is %.4f %s at Node %s"         
-#define FMT60b "            Max. head imbalance is %.4f %s at Link %s"         
+#define FMT60a "            Max. flow imbalance is %.4f %s at Node %s"
+#define FMT60b "            Max. head imbalance is %.4f %s at Link %s"
 
 #define FMT61  "%10s: Valve %s caused ill-conditioning"
 #define FMT62  "%10s: System ill-conditioned at node %s"
@@ -480,7 +480,7 @@
 "WARNING: Maximum trials exceeded at %s hrs. System may be unstable."
 #define WARN03a "WARNING: Node %s disconnected at %s hrs"
 #define WARN03b "WARNING: %d additional nodes disconnected at %s hrs"
-#define WARN03c "WARNING: System disconnected because of Link %s" 
+#define WARN03c "WARNING: System disconnected because of Link %s"
 #define WARN04  "WARNING: Pump %s %s at %s hrs."
 #define WARN05  "WARNING: %s %s %s at %s hrs."
 #define WARN06  "WARNING: Negative pressures at %s hrs."
