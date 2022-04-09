@@ -20,6 +20,7 @@ Last Updated: 05/15/2019
 #include "mempool.h"
 #include "types.h"
 #include "funcs.h"
+#include "report.h"
 
 // Stagnant flow tolerance
 const double Q_STAGNANT = 0.005 / GPMperCFS;    // 0.005 gpm = 1.114e-5 cfs

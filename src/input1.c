@@ -20,6 +20,8 @@ Last Updated: 07/08/2019
 #include "types.h"
 #include "funcs.h"
 #include "text.h"
+#include "enumstxt.h"
+#include "report.h"
 
 // Default values
 #define MAXITER  200            // Default max. # hydraulic iterations
@@ -36,10 +38,6 @@ Last Updated: 07/08/2019
 #define CHECKFREQ 2             // Default status check frequency
 #define MAXCHECK 10             // Default # iterations for status checks
 #define DAMPLIMIT 0             // Default damping threshold
-
-// Defined in ENUMSTXT.H
-extern char *Fldname[];
-extern char *RptFlowUnitsTxt[];
 
 int
 getdata (Project * pr)

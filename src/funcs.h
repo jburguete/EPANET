@@ -76,7 +76,7 @@ void convertunits (Project *);
 int netsize (Project *);
 int readdata (Project *);
 int updatepumpparams (Project *, int);
-int findmatch (char *, char *[]);
+int findmatch (char *, const char *[]);
 int match (const char *, const char *);
 int gettokens (char *, char **, int, char *);
 int getfloat (char *, double *);
@@ -122,26 +122,6 @@ Spremise *getpremise (Spremise *, int);
 Saction *getaction (Saction *, int);
 int writerule (Project *, FILE *, int);
 int checkrules (Project *, long);
-
-// ------- REPORT.C -----------------
-
-int clearreport (Project *);
-int copyreport (Project *, char *);
-int writereport (Project *);
-void writelogo (Project *);
-void writesummary (Project *);
-void writehydstat (Project *, int, double);
-void writeheader (Project *, int, int);
-void writeline (Project *, char *);
-void writerelerr (Project *, int, double);
-void writestatchange (Project *, int, char, char);
-void writecontrolaction (Project *, int, int);
-void writeruleaction (Project *, int, char *);
-int writehydwarn (Project *, int, double);
-void writehyderr (Project *, int);
-void writemassbalance (Project *);
-void writetime (Project *, char *);
-char *clocktime (char *, long);
 
 // ------- HYDRAUL.C -----------------
 

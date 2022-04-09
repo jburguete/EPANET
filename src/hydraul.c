@@ -20,6 +20,7 @@
 #include "types.h"
 #include "funcs.h"
 #include "text.h"
+#include "report.h"
 #include "smatrix.h"
 
 const double QZERO = 1.e-6;     // Equivalent to zero flow in cfs

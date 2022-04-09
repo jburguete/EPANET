@@ -20,11 +20,7 @@ Last Updated: 11/29/2019
 #include "types.h"
 #include "funcs.h"
 #include "text.h"
-
-// Defined in ENUMSTXT.H
-extern char *MixTxt[];
-extern char *Fldname[];
-extern char *DemandModelTxt[];
+#include "enumstxt.h"
 
 // Exported functions
 int powercurve (double, double, double, double, double, double *, double *,

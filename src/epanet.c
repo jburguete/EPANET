@@ -24,6 +24,7 @@
 #include "funcs.h"
 #include "text.h"
 #include "enumstxt.h"
+#include "report.h"
 
 /********************************************************************
 
@@ -974,7 +975,7 @@ EN_copyreport (EN_Project p, char *filename)
 **----------------------------------------------------------------
 */
 {
-  return copyreport (p, filename);
+  return copyreport (&p->report, filename);
 }
 
 int DLLEXPORT

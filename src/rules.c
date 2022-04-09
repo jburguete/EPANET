@@ -19,6 +19,7 @@
 #include "types.h"
 #include "funcs.h"
 #include "text.h"
+#include "report.h"
 
 enum Rulewords
 {
@@ -31,7 +32,7 @@ enum Rulewords
   r_PRIORITY,
   r_ERROR
 };
-char *Ruleword[] = { w_RULE, w_IF, w_AND, w_OR,
+const char *Ruleword[] = { w_RULE, w_IF, w_AND, w_OR,
   w_THEN, w_ELSE, w_PRIORITY, NULL
 };
 
@@ -51,7 +52,7 @@ enum Varwords
   r_FILLTIME,
   r_DRAINTIME
 };
-char *Varword[] = { w_DEMAND, w_HEAD, w_GRADE, w_LEVEL, w_PRESSURE,
+const char *Varword[] = { w_DEMAND, w_HEAD, w_GRADE, w_LEVEL, w_PRESSURE,
   w_FLOW, w_STATUS, w_SETTING, w_POWER, w_TIME,
   w_CLOCKTIME, w_FILLTIME, w_DRAINTIME, NULL
 };
@@ -68,35 +69,22 @@ enum Objects
   r_LINK,
   r_SYSTEM
 };
-char *Object[] = { w_JUNC, w_RESERV, w_TANK, w_PIPE, w_PUMP,
+const char *Object[] = { w_JUNC, w_RESERV, w_TANK, w_PIPE, w_PUMP,
   w_VALVE, w_NODE, w_LINK, w_SYSTEM, NULL
 };
 
 // NOTE: place "<=" & ">=" before "<" & ">" so that findmatch() works correctly.
 enum Operators
 { EQ, NE, LE, GE, LT, GT, IS, NOT, BELOW, ABOVE };
-char *Operator[] = { "=", "<>", "<=", ">=", "<", ">",
+const char *Operator[] = { "=", "<>", "<=", ">=", "<", ">",
   w_IS, w_NOT, w_BELOW, w_ABOVE, NULL
 };
 
 enum Values
 { IS_NUMBER, IS_OPEN, IS_CLOSED, IS_ACTIVE };
-char *Value[] = { "XXXX", w_OPEN, w_CLOSED, w_ACTIVE, NULL };
+const char *Value[] = { "XXXX", w_OPEN, w_CLOSED, w_ACTIVE, NULL };
 
 // Local functions
-static void newrule (Project *);
-static int newpremise (Project *, int);
-static int newaction (Project *);
-static int newpriority (Project *);
-
-static int evalpremises (Project *, int);
-static int checkpremise (Project *, Spremise *);
-static int checktime (Project *, Spremise *);
-static int checkstatus (Project *, Spremise *);
-static int checkvalue (Project *, Spremise *);
-
-static int onactionlist (Project *, int, Saction *);
-static void updateactionlist (Project *, int, Saction *);
 static int takeactions (Project *);
 static void clearactionlist (Rules *);
 static void clearrule (Project *, int);
@@ -106,6 +94,715 @@ static void writeaction (Saction *, FILE *, Network *);
 static void getobjtxt (int, int, char *);
 static void gettimetxt (double, char *);
 
+/**
+ * funtion to add a new rule to the project.
+ */
+static inline void
+newrule (Project * pr)
+{
+  Network *net = &pr->network;
+
+  char **Tok = pr->parser.Tok;
+  Srule *rule = &net->Rule[net->Nrules];
+
+  strncpy (rule->label, Tok[1], MAXID);
+  rule->Premises = NULL;
+  rule->ThenActions = NULL;
+  rule->ElseActions = NULL;
+  rule->priority = 0.0;
+  pr->rules.LastPremise = NULL;
+  pr->rules.LastThenAction = NULL;
+  pr->rules.LastElseAction = NULL;
+}
+
+/**
+ * function to add new premise to current rule.
+ * Formats are:
+ *   IF/AND/OR <object> <id> <variable> <operator> <value>
+ *   IF/AND/OR  SYSTEM <variable> <operator> <value> (units)
+ */
+static int
+newpremise (Project * pr, int logop)
+{
+  Network *net = &pr->network;
+  Parser *parser = &pr->parser;
+  Rules *rules = &pr->rules;
+
+  int i, j, k, m, r, s, v;
+  double x;
+  char **Tok = parser->Tok;
+  Spremise *p;
+
+  // Check for correct number of tokens
+  if (parser->Ntokens != 5 && parser->Ntokens != 6)
+    return 201;
+
+  // Find network object & id if present
+  i = findmatch (Tok[1], Object);
+  if (i == r_SYSTEM)
+    {
+      j = 0;
+      v = findmatch (Tok[2], Varword);
+      if (v != r_DEMAND && v != r_TIME && v != r_CLOCKTIME)
+        return 201;
+    }
+  else
+    {
+      v = findmatch (Tok[3], Varword);
+      if (v < 0)
+        return (201);
+      switch (i)
+        {
+        case r_NODE:
+        case r_JUNC:
+        case r_RESERV:
+        case r_TANK:
+          k = r_NODE;
+          break;
+        case r_LINK:
+        case r_PIPE:
+        case r_PUMP:
+        case r_VALVE:
+          k = r_LINK;
+          break;
+        default:
+          return 201;
+        }
+      i = k;
+      if (i == r_NODE)
+        {
+          j = findnode (net, Tok[2]);
+          if (j == 0)
+            return 203;
+          switch (v)
+            {
+            case r_DEMAND:
+            case r_HEAD:
+            case r_GRADE:
+            case r_LEVEL:
+            case r_PRESSURE:
+              break;
+            case r_FILLTIME:
+            case r_DRAINTIME:
+              if (j <= net->Njuncs)
+                return 201;
+              break;
+            default:
+              return 201;
+            }
+        }
+      else
+        {
+          j = findlink (net, Tok[2]);
+          if (j == 0)
+            return 204;
+          switch (v)
+            {
+            case r_FLOW:
+            case r_STATUS:
+            case r_SETTING:
+              break;
+            default:
+              return 201;
+            }
+        }
+    }
+
+  // Parse relational operator (r) and check for synonyms
+  if (i == r_SYSTEM)
+    m = 3;
+  else
+    m = 4;
+  k = findmatch (Tok[m], Operator);
+  if (k < 0)
+    return 201;
+  switch (k)
+    {
+    case IS:
+      r = EQ;
+      break;
+    case NOT:
+      r = NE;
+      break;
+    case BELOW:
+      r = LT;
+      break;
+    case ABOVE:
+      r = GT;
+      break;
+    default:
+      r = k;
+    }
+
+  // Parse for status (s) or numerical value (x)
+  s = 0;
+  x = MISSING;
+  if (v == r_TIME || v == r_CLOCKTIME)
+    {
+      if (parser->Ntokens == 6)
+        x = hour (Tok[4], Tok[5]) * 3600.;
+      else
+        x = hour (Tok[4], "") * 3600.;
+      if (x < 0.0)
+        return 202;
+    }
+  else if ((k = findmatch (Tok[parser->Ntokens - 1], Value)) > IS_NUMBER)
+    s = k;
+  else
+    {
+      if (!getfloat (Tok[parser->Ntokens - 1], &x))
+        return (202);
+      if (v == r_FILLTIME || v == r_DRAINTIME)
+        x = x * 3600.0;
+    }
+
+  // Create new premise structure
+  p = (Spremise *) malloc (sizeof (Spremise));
+  if (p == NULL)
+    return 101;
+  p->object = i;
+  p->index = j;
+  p->variable = v;
+  p->relop = r;
+  p->logop = logop;
+  p->status = s;
+  p->value = x;
+
+  // Add premise to current rule's premise list
+  p->next = NULL;
+  if (rules->LastPremise == NULL)
+    net->Rule[net->Nrules].Premises = p;
+  else
+    rules->LastPremise->next = p;
+  rules->LastPremise = p;
+  return 0;
+}
+
+/**
+ * function to add new action to current rule.
+ * Format is:
+ *   THEN/ELSE/AND LINK <id> <variable> IS <value>
+ */
+static int
+newaction (Project * pr)
+{
+  Network *net = &pr->network;
+  Parser *parser = &pr->parser;
+  Rules *rules = &pr->rules;
+
+  int j, k, s;
+  double x;
+  Saction *a;
+  char **Tok = parser->Tok;
+
+  // Check for correct number of tokens
+  if (parser->Ntokens != 6)
+    return 201;
+
+  // Check that link exists
+  j = findlink (net, Tok[2]);
+  if (j == 0)
+    return 204;
+
+  // Cannot control a CV
+  if (net->Link[j].Type == CVPIPE)
+    return 207;
+
+  // Find value for status or setting
+  s = -1;
+  x = MISSING;
+  if ((k = findmatch (Tok[5], Value)) > IS_NUMBER)
+    s = k;
+  else
+    {
+      if (!getfloat (Tok[5], &x))
+        return 202;
+      if (x < 0.0)
+        return 202;
+    }
+
+  // Cannot change setting for a GPV
+  if (x != MISSING && net->Link[j].Type == GPV)
+    return 202;
+
+  // Set status for pipe in case setting was specified
+  if (x != MISSING && net->Link[j].Type == PIPE)
+    {
+      if (x == 0.0)
+        s = IS_CLOSED;
+      else
+        s = IS_OPEN;
+      x = MISSING;
+    }
+
+  // Create a new action structure
+  a = (Saction *) malloc (sizeof (Saction));
+  if (a == NULL)
+    return 101;
+  a->link = j;
+  a->status = s;
+  a->setting = x;
+
+  // Add action to current rule's action list
+  if (rules->RuleState == r_THEN)
+    {
+      a->next = NULL;
+      if (rules->LastThenAction == NULL)
+        {
+          net->Rule[net->Nrules].ThenActions = a;
+        }
+      else
+        rules->LastThenAction->next = a;
+      rules->LastThenAction = a;
+    }
+  else
+    {
+      a->next = NULL;
+      if (rules->LastElseAction == NULL)
+        {
+          net->Rule[net->Nrules].ElseActions = a;
+        }
+      else
+        rules->LastElseAction->next = a;
+      rules->LastElseAction = a;
+    }
+  return 0;
+}
+
+/**
+ * function to add priority rating to current rule.
+ */
+static inline int
+newpriority (Network * net, char **Tok)
+{
+  double x;
+
+  if (!getfloat (Tok[1], &x))
+    return 202;
+  net->Rule[net->Nrules].priority = x;
+  return 0;
+}
+
+/**
+ * function to check if condition on system time holds.
+ */
+static int
+checktime (Times * time, Rules * rules, Spremise * p)
+{
+
+  char flag;
+  long t1, t2, x;
+
+  // Get start and end of rule evaluation time interval
+  if (p->variable == r_TIME)
+    {
+      t1 = rules->Time1;
+      t2 = time->Htime;
+    }
+  else if (p->variable == r_CLOCKTIME)
+    {
+      t1 = (rules->Time1 + time->Tstart) % SECperDAY;
+      t2 = (time->Htime + time->Tstart) % SECperDAY;
+    }
+  else
+    return (0);
+
+  // Test premise's time
+  x = (long) (p->value);
+  switch (p->relop)
+    {
+      // For inequality, test against current time
+    case LT:
+      if (t2 >= x)
+        return (0);
+      break;
+    case LE:
+      if (t2 > x)
+        return (0);
+      break;
+    case GT:
+      if (t2 <= x)
+        return (0);
+      break;
+    case GE:
+      if (t2 < x)
+        return (0);
+      break;
+
+      // For equality, test if within interval
+    case EQ:
+    case NE:
+      flag = FALSE;
+      if (t2 < t1)              // E.g., 11:00 am to 1:00 am
+        {
+          if (x >= t1 || x <= t2)
+            flag = TRUE;
+        }
+      else
+        {
+          if (x >= t1 && x <= t2)
+            flag = TRUE;
+        }
+      if (p->relop == EQ && flag == FALSE)
+        return (0);
+      if (p->relop == NE && flag == TRUE)
+        return (0);
+      break;
+    }
+
+  // If we get to here then premise was satisfied
+  return 1;
+}
+
+/**
+ * function to check if condition on link status holds.
+ */
+static inline int
+checkstatus (Hydraul * hyd, Spremise * p)
+{
+
+  char i;
+  int j;
+
+  switch (p->status)
+    {
+    case IS_OPEN:
+    case IS_CLOSED:
+    case IS_ACTIVE:
+      i = hyd->LinkStatus[p->index];
+      if (i <= CLOSED)
+        j = IS_CLOSED;
+      else if (i == ACTIVE)
+        j = IS_ACTIVE;
+      else
+        j = IS_OPEN;
+      if (j == p->status && p->relop == EQ)
+        return 1;
+      if (j != p->status && p->relop == NE)
+        return 1;
+    }
+  return 0;
+}
+
+/**
+ * function to check if numerical condition on a variable is true. Uses
+ * tolerance of 0.001 when testing conditions.
+ */
+static inline int
+checkvalue (Network * net, Hydraul * hyd, double *Ucf, Spremise * p)
+{
+
+  int i, j, v;
+  double x,                     // A variable's value
+    tol = 1.e-3;                // Equality tolerance
+  int Njuncs = net->Njuncs;
+  double *NodeDemand = hyd->NodeDemand;
+  double *LinkFlow = hyd->LinkFlow;
+  double *LinkSetting = hyd->LinkSetting;
+  Snode *Node = net->Node;
+  Slink *Link = net->Link;
+  Stank *Tank = net->Tank;
+
+  // Find the value being checked
+  i = p->index;
+  v = p->variable;
+  switch (v)
+    {
+    case r_DEMAND:
+      if (p->object == r_SYSTEM)
+        x = hyd->Dsystem * Ucf[DEMAND];
+      else
+        x = NodeDemand[i] * Ucf[DEMAND];
+      break;
+
+    case r_HEAD:
+    case r_GRADE:
+      x = hyd->NodeHead[i] * Ucf[HEAD];
+      break;
+
+    case r_PRESSURE:
+      x = (hyd->NodeHead[i] - Node[i].El) * Ucf[PRESSURE];
+      break;
+
+    case r_LEVEL:
+      x = (hyd->NodeHead[i] - Node[i].El) * Ucf[HEAD];
+      break;
+
+    case r_FLOW:
+      x = ABS (LinkFlow[i]) * Ucf[FLOW];
+      break;
+
+    case r_SETTING:
+      if (LinkSetting[i] == MISSING)
+        return 0;
+      x = LinkSetting[i];
+      switch (Link[i].Type)
+        {
+        case PRV:
+        case PSV:
+        case PBV:
+          x = x * Ucf[PRESSURE];
+          break;
+        case FCV:
+          x = x * Ucf[FLOW];
+          break;
+        default:
+          break;
+        }
+      break;
+
+    case r_FILLTIME:
+      if (i <= Njuncs)
+        return 0;
+      j = i - Njuncs;
+      if (Tank[j].A == 0.0)
+        return 0;
+      if (NodeDemand[i] <= TINY)
+        return 0;
+      x = (Tank[j].Vmax - Tank[j].V) / NodeDemand[i];
+      break;
+
+    case r_DRAINTIME:
+      if (i <= Njuncs)
+        return 0;
+      j = i - Njuncs;
+      if (Tank[j].A == 0.0)
+        return 0;
+      if (NodeDemand[i] >= -TINY)
+        return 0;
+      x = (Tank[j].Vmin - Tank[j].V) / NodeDemand[i];
+      break;
+
+    default:
+      return 0;
+    }
+
+  // Compare value x against the premise
+  switch (p->relop)
+    {
+    case EQ:
+      if (ABS (x - p->value) > tol)
+        return 0;
+      break;
+    case NE:
+      if (ABS (x - p->value) < tol)
+        return 0;
+      break;
+    case LT:
+      if (x > p->value + tol)
+        return 0;
+      break;
+    case LE:
+      if (x > p->value - tol)
+        return 0;
+      break;
+    case GT:
+      if (x < p->value - tol)
+        return 0;
+      break;
+    case GE:
+      if (x < p->value + tol)
+        return 0;
+      break;
+    }
+  return 1;
+}
+
+/**
+ * function to check if a particular premise is true.
+ */
+static int
+checkpremise (Project * pr, Spremise * p)
+{
+  if (p->variable == r_TIME || p->variable == r_CLOCKTIME)
+    return (checktime (&pr->times, &pr->rules, p));
+  else if (p->status > IS_NUMBER)
+    return (checkstatus (&pr->hydraul, p));
+  else
+    return (checkvalue (&pr->network, &pr->hydraul, pr->Ucf, p));
+}
+
+/**
+ * function to check if premises to rule i are true.
+ */
+static inline int
+evalpremises (Project * pr, int i)
+{
+  Network *net = &pr->network;
+
+  int result;
+  Spremise *p;
+
+  result = TRUE;
+  p = net->Rule[i].Premises;
+  while (p != NULL)
+    {
+      if (p->logop == r_OR)
+        {
+          if (result == FALSE)
+            result = checkpremise (pr, p);
+        }
+      else
+        {
+          if (result == FALSE)
+            return (FALSE);
+          result = checkpremise (pr, p);
+        }
+      p = p->next;
+    }
+  return result;
+}
+
+/**
+ * function to check if action a from rule i can be added to the action list.
+ */
+static inline int
+onactionlist (Network * net, Rules * rules, int i, Saction * a)
+{
+  int link, i1;
+  SactionList *actionItem;
+  Saction *a1;
+
+  // Search action list for link included in action a
+  link = a->link;
+  actionItem = rules->ActionList;
+  while (actionItem != NULL)
+    {
+      a1 = actionItem->action;
+      i1 = actionItem->ruleIndex;
+
+      // Link appears in list
+      if (link == a1->link)
+        {
+          // Replace its action with 'a' if rule i has higher priority
+          if (net->Rule[i].priority > net->Rule[i1].priority)
+            {
+              actionItem->action = a;
+              actionItem->ruleIndex = i;
+            }
+
+          // Return indicating that 'a' should not be added to action list
+          return 1;
+        }
+      actionItem = actionItem->next;
+    }
+
+  // Return indicating that it's ok to add 'a' to the action list
+  return 0;
+}
+
+/**
+ * function to add rule's actions to action list.
+ */
+static void
+updateactionlist (Project * pr, int i, Saction * actions)
+{
+  Rules *rules = &pr->rules;
+
+  SactionList *actionItem;
+  Saction *a;
+
+  // Iterate through each action of Rule i
+  a = actions;
+  while (a != NULL)
+    {
+      // Add action to list if its link not already on it
+      if (!onactionlist (&pr->network, rules, i, a))
+        {
+          actionItem = (SactionList *) malloc (sizeof (SactionList));
+          if (actionItem != NULL)
+            {
+              actionItem->action = a;
+              actionItem->ruleIndex = i;
+              actionItem->next = rules->ActionList;
+              rules->ActionList = actionItem;
+            }
+        }
+      a = a->next;
+    }
+}
+
+/**
+ * function to implement actions on action list.
+ */
+static inline int
+takeactions (Project * pr)
+{
+  Network *net = &pr->network;
+  Hydraul *hyd = &pr->hydraul;
+  Report *rpt = &pr->report;
+  Rules *rules = &pr->rules;
+
+  char flag;
+  int k, s, n;
+  double tol = 1.e-3, v, x;
+  Saction *a;
+  SactionList *actionItem;
+
+  n = 0;
+  actionItem = rules->ActionList;
+  while (actionItem != NULL)
+    {
+      flag = FALSE;
+      a = actionItem->action;
+      k = a->link;
+      s = hyd->LinkStatus[k];
+      v = hyd->LinkSetting[k];
+      x = a->setting;
+
+      // Switch link from closed to open
+      if (a->status == IS_OPEN && s <= CLOSED)
+        {
+          setlinkstatus (pr, k, 1, &hyd->LinkStatus[k], &hyd->LinkSetting[k]);
+          flag = TRUE;
+        }
+
+      // Switch link from not closed to closed
+      else if (a->status == IS_CLOSED && s > CLOSED)
+        {
+          setlinkstatus (pr, k, 0, &hyd->LinkStatus[k], &hyd->LinkSetting[k]);
+          flag = TRUE;
+        }
+
+      // Change link's setting
+      else if (x != MISSING)
+        {
+          switch (net->Link[k].Type)
+            {
+            case PRV:
+            case PSV:
+            case PBV:
+              x = x / pr->Ucf[PRESSURE];
+              break;
+            case FCV:
+              x = x / pr->Ucf[FLOW];
+              break;
+            default:
+              break;
+            }
+          if (ABS (x - v) > tol)
+            {
+              setlinksetting (pr, k, x, &hyd->LinkStatus[k],
+                              &hyd->LinkSetting[k]);
+              flag = TRUE;
+            }
+        }
+
+      // Report rule action
+      if (flag == TRUE)
+        {
+          n++;
+          if (rpt->Statflag)
+            {
+              writeruleaction (pr, k, net->Rule[actionItem->ruleIndex].label);
+            }
+        }
+
+      // Move to next action on list
+      actionItem = actionItem->next;
+    }
+  return n;
+}
 
 void
 initrules (Project * pr)
@@ -289,7 +986,7 @@ ruledata (Project * pr)
           break;
         }
       rules->RuleState = r_PRIORITY;
-      err = newpriority (pr);
+      err = newpriority (net, Tok);
       break;
 
     default:
@@ -604,727 +1301,6 @@ checkrules (Project * pr, long dt)
     actionCount = takeactions (pr);
   clearactionlist (rules);
   return actionCount;
-}
-
-void
-newrule (Project * pr)
-//----------------------------------------------------------
-//    Adds a new rule to the project
-//----------------------------------------------------------
-{
-  Network *net = &pr->network;
-
-  char **Tok = pr->parser.Tok;
-  Srule *rule = &net->Rule[net->Nrules];
-
-  strncpy (rule->label, Tok[1], MAXID);
-  rule->Premises = NULL;
-  rule->ThenActions = NULL;
-  rule->ElseActions = NULL;
-  rule->priority = 0.0;
-  pr->rules.LastPremise = NULL;
-  pr->rules.LastThenAction = NULL;
-  pr->rules.LastElseAction = NULL;
-}
-
-int
-newpremise (Project * pr, int logop)
-//--------------------------------------------------------------------
-//   Adds new premise to current rule.
-//   Formats are:
-//     IF/AND/OR <object> <id> <variable> <operator> <value>
-//     IF/AND/OR  SYSTEM <variable> <operator> <value> (units)
-//---------------------------------------------------------------------
-{
-  Network *net = &pr->network;
-  Parser *parser = &pr->parser;
-  Rules *rules = &pr->rules;
-
-  int i, j, k, m, r, s, v;
-  double x;
-  char **Tok = parser->Tok;
-  Spremise *p;
-
-  // Check for correct number of tokens
-  if (parser->Ntokens != 5 && parser->Ntokens != 6)
-    return 201;
-
-  // Find network object & id if present
-  i = findmatch (Tok[1], Object);
-  if (i == r_SYSTEM)
-    {
-      j = 0;
-      v = findmatch (Tok[2], Varword);
-      if (v != r_DEMAND && v != r_TIME && v != r_CLOCKTIME)
-        return 201;
-    }
-  else
-    {
-      v = findmatch (Tok[3], Varword);
-      if (v < 0)
-        return (201);
-      switch (i)
-        {
-        case r_NODE:
-        case r_JUNC:
-        case r_RESERV:
-        case r_TANK:
-          k = r_NODE;
-          break;
-        case r_LINK:
-        case r_PIPE:
-        case r_PUMP:
-        case r_VALVE:
-          k = r_LINK;
-          break;
-        default:
-          return 201;
-        }
-      i = k;
-      if (i == r_NODE)
-        {
-          j = findnode (net, Tok[2]);
-          if (j == 0)
-            return 203;
-          switch (v)
-            {
-            case r_DEMAND:
-            case r_HEAD:
-            case r_GRADE:
-            case r_LEVEL:
-            case r_PRESSURE:
-              break;
-            case r_FILLTIME:
-            case r_DRAINTIME:
-              if (j <= net->Njuncs)
-                return 201;
-              break;
-            default:
-              return 201;
-            }
-        }
-      else
-        {
-          j = findlink (net, Tok[2]);
-          if (j == 0)
-            return 204;
-          switch (v)
-            {
-            case r_FLOW:
-            case r_STATUS:
-            case r_SETTING:
-              break;
-            default:
-              return 201;
-            }
-        }
-    }
-
-  // Parse relational operator (r) and check for synonyms
-  if (i == r_SYSTEM)
-    m = 3;
-  else
-    m = 4;
-  k = findmatch (Tok[m], Operator);
-  if (k < 0)
-    return 201;
-  switch (k)
-    {
-    case IS:
-      r = EQ;
-      break;
-    case NOT:
-      r = NE;
-      break;
-    case BELOW:
-      r = LT;
-      break;
-    case ABOVE:
-      r = GT;
-      break;
-    default:
-      r = k;
-    }
-
-  // Parse for status (s) or numerical value (x)
-  s = 0;
-  x = MISSING;
-  if (v == r_TIME || v == r_CLOCKTIME)
-    {
-      if (parser->Ntokens == 6)
-        x = hour (Tok[4], Tok[5]) * 3600.;
-      else
-        x = hour (Tok[4], "") * 3600.;
-      if (x < 0.0)
-        return 202;
-    }
-  else if ((k = findmatch (Tok[parser->Ntokens - 1], Value)) > IS_NUMBER)
-    s = k;
-  else
-    {
-      if (!getfloat (Tok[parser->Ntokens - 1], &x))
-        return (202);
-      if (v == r_FILLTIME || v == r_DRAINTIME)
-        x = x * 3600.0;
-    }
-
-  // Create new premise structure
-  p = (Spremise *) malloc (sizeof (Spremise));
-  if (p == NULL)
-    return 101;
-  p->object = i;
-  p->index = j;
-  p->variable = v;
-  p->relop = r;
-  p->logop = logop;
-  p->status = s;
-  p->value = x;
-
-  // Add premise to current rule's premise list
-  p->next = NULL;
-  if (rules->LastPremise == NULL)
-    net->Rule[net->Nrules].Premises = p;
-  else
-    rules->LastPremise->next = p;
-  rules->LastPremise = p;
-  return 0;
-}
-
-int
-newaction (Project * pr)
-//----------------------------------------------------------
-//   Adds new action to current rule.
-//   Format is:
-//      THEN/ELSE/AND LINK <id> <variable> IS <value>
-//----------------------------------------------------------
-{
-  Network *net = &pr->network;
-  Parser *parser = &pr->parser;
-  Rules *rules = &pr->rules;
-
-  int j, k, s;
-  double x;
-  Saction *a;
-  char **Tok = parser->Tok;
-
-  // Check for correct number of tokens
-  if (parser->Ntokens != 6)
-    return 201;
-
-  // Check that link exists
-  j = findlink (net, Tok[2]);
-  if (j == 0)
-    return 204;
-
-  // Cannot control a CV
-  if (net->Link[j].Type == CVPIPE)
-    return 207;
-
-  // Find value for status or setting
-  s = -1;
-  x = MISSING;
-  if ((k = findmatch (Tok[5], Value)) > IS_NUMBER)
-    s = k;
-  else
-    {
-      if (!getfloat (Tok[5], &x))
-        return 202;
-      if (x < 0.0)
-        return 202;
-    }
-
-  // Cannot change setting for a GPV
-  if (x != MISSING && net->Link[j].Type == GPV)
-    return 202;
-
-  // Set status for pipe in case setting was specified
-  if (x != MISSING && net->Link[j].Type == PIPE)
-    {
-      if (x == 0.0)
-        s = IS_CLOSED;
-      else
-        s = IS_OPEN;
-      x = MISSING;
-    }
-
-  // Create a new action structure
-  a = (Saction *) malloc (sizeof (Saction));
-  if (a == NULL)
-    return 101;
-  a->link = j;
-  a->status = s;
-  a->setting = x;
-
-  // Add action to current rule's action list
-  if (rules->RuleState == r_THEN)
-    {
-      a->next = NULL;
-      if (rules->LastThenAction == NULL)
-        {
-          net->Rule[net->Nrules].ThenActions = a;
-        }
-      else
-        rules->LastThenAction->next = a;
-      rules->LastThenAction = a;
-    }
-  else
-    {
-      a->next = NULL;
-      if (rules->LastElseAction == NULL)
-        {
-          net->Rule[net->Nrules].ElseActions = a;
-        }
-      else
-        rules->LastElseAction->next = a;
-      rules->LastElseAction = a;
-    }
-  return 0;
-}
-
-int
-newpriority (Project * pr)
-//---------------------------------------------------
-//    Adds priority rating to current rule
-//---------------------------------------------------
-{
-  Network *net = &pr->network;
-
-  double x;
-  char **Tok = pr->parser.Tok;
-
-  if (!getfloat (Tok[1], &x))
-    return 202;
-  net->Rule[net->Nrules].priority = x;
-  return 0;
-}
-
-int
-evalpremises (Project * pr, int i)
-//----------------------------------------------------------
-//    Checks if premises to rule i are true
-//----------------------------------------------------------
-{
-  Network *net = &pr->network;
-
-  int result;
-  Spremise *p;
-
-  result = TRUE;
-  p = net->Rule[i].Premises;
-  while (p != NULL)
-    {
-      if (p->logop == r_OR)
-        {
-          if (result == FALSE)
-            result = checkpremise (pr, p);
-        }
-      else
-        {
-          if (result == FALSE)
-            return (FALSE);
-          result = checkpremise (pr, p);
-        }
-      p = p->next;
-    }
-  return result;
-}
-
-int
-checkpremise (Project * pr, Spremise * p)
-//----------------------------------------------------------
-//    Checks if a particular premise is true
-//----------------------------------------------------------
-{
-  if (p->variable == r_TIME || p->variable == r_CLOCKTIME)
-    return (checktime (pr, p));
-  else if (p->status > IS_NUMBER)
-    return (checkstatus (pr, p));
-  else
-    return (checkvalue (pr, p));
-}
-
-int
-checktime (Project * pr, Spremise * p)
-//------------------------------------------------------------
-//    Checks if condition on system time holds
-//------------------------------------------------------------
-{
-  Times *time = &pr->times;
-  Rules *rules = &pr->rules;
-
-  char flag;
-  long t1, t2, x;
-
-  // Get start and end of rule evaluation time interval
-  if (p->variable == r_TIME)
-    {
-      t1 = rules->Time1;
-      t2 = time->Htime;
-    }
-  else if (p->variable == r_CLOCKTIME)
-    {
-      t1 = (rules->Time1 + time->Tstart) % SECperDAY;
-      t2 = (time->Htime + time->Tstart) % SECperDAY;
-    }
-  else
-    return (0);
-
-  // Test premise's time
-  x = (long) (p->value);
-  switch (p->relop)
-    {
-      // For inequality, test against current time
-    case LT:
-      if (t2 >= x)
-        return (0);
-      break;
-    case LE:
-      if (t2 > x)
-        return (0);
-      break;
-    case GT:
-      if (t2 <= x)
-        return (0);
-      break;
-    case GE:
-      if (t2 < x)
-        return (0);
-      break;
-
-      // For equality, test if within interval
-    case EQ:
-    case NE:
-      flag = FALSE;
-      if (t2 < t1)              // E.g., 11:00 am to 1:00 am
-        {
-          if (x >= t1 || x <= t2)
-            flag = TRUE;
-        }
-      else
-        {
-          if (x >= t1 && x <= t2)
-            flag = TRUE;
-        }
-      if (p->relop == EQ && flag == FALSE)
-        return (0);
-      if (p->relop == NE && flag == TRUE)
-        return (0);
-      break;
-    }
-
-  // If we get to here then premise was satisfied
-  return 1;
-}
-
-int
-checkstatus (Project * pr, Spremise * p)
-//------------------------------------------------------------
-//    Checks if condition on link status holds
-//------------------------------------------------------------
-{
-  Hydraul *hyd = &pr->hydraul;
-
-  char i;
-  int j;
-
-  switch (p->status)
-    {
-    case IS_OPEN:
-    case IS_CLOSED:
-    case IS_ACTIVE:
-      i = hyd->LinkStatus[p->index];
-      if (i <= CLOSED)
-        j = IS_CLOSED;
-      else if (i == ACTIVE)
-        j = IS_ACTIVE;
-      else
-        j = IS_OPEN;
-      if (j == p->status && p->relop == EQ)
-        return 1;
-      if (j != p->status && p->relop == NE)
-        return 1;
-    }
-  return 0;
-}
-
-int
-checkvalue (Project * pr, Spremise * p)
-//----------------------------------------------------------
-//    Checks if numerical condition on a variable is true.
-//    Uses tolerance of 0.001 when testing conditions.
-//----------------------------------------------------------
-{
-  Network *net = &pr->network;
-  Hydraul *hyd = &pr->hydraul;
-
-  int i, j, v;
-  double x,                     // A variable's value
-    tol = 1.e-3;                // Equality tolerance
-  int Njuncs = net->Njuncs;
-  double *Ucf = pr->Ucf;
-  double *NodeDemand = hyd->NodeDemand;
-  double *LinkFlow = hyd->LinkFlow;
-  double *LinkSetting = hyd->LinkSetting;
-  Snode *Node = net->Node;
-  Slink *Link = net->Link;
-  Stank *Tank = net->Tank;
-
-  // Find the value being checked
-  i = p->index;
-  v = p->variable;
-  switch (v)
-    {
-    case r_DEMAND:
-      if (p->object == r_SYSTEM)
-        x = hyd->Dsystem * Ucf[DEMAND];
-      else
-        x = NodeDemand[i] * Ucf[DEMAND];
-      break;
-
-    case r_HEAD:
-    case r_GRADE:
-      x = hyd->NodeHead[i] * Ucf[HEAD];
-      break;
-
-    case r_PRESSURE:
-      x = (hyd->NodeHead[i] - Node[i].El) * Ucf[PRESSURE];
-      break;
-
-    case r_LEVEL:
-      x = (hyd->NodeHead[i] - Node[i].El) * Ucf[HEAD];
-      break;
-
-    case r_FLOW:
-      x = ABS (LinkFlow[i]) * Ucf[FLOW];
-      break;
-
-    case r_SETTING:
-      if (LinkSetting[i] == MISSING)
-        return 0;
-      x = LinkSetting[i];
-      switch (Link[i].Type)
-        {
-        case PRV:
-        case PSV:
-        case PBV:
-          x = x * Ucf[PRESSURE];
-          break;
-        case FCV:
-          x = x * Ucf[FLOW];
-          break;
-        default:
-          break;
-        }
-      break;
-
-    case r_FILLTIME:
-      if (i <= Njuncs)
-        return 0;
-      j = i - Njuncs;
-      if (Tank[j].A == 0.0)
-        return 0;
-      if (NodeDemand[i] <= TINY)
-        return 0;
-      x = (Tank[j].Vmax - Tank[j].V) / NodeDemand[i];
-      break;
-
-    case r_DRAINTIME:
-      if (i <= Njuncs)
-        return 0;
-      j = i - Njuncs;
-      if (Tank[j].A == 0.0)
-        return 0;
-      if (NodeDemand[i] >= -TINY)
-        return 0;
-      x = (Tank[j].Vmin - Tank[j].V) / NodeDemand[i];
-      break;
-
-    default:
-      return 0;
-    }
-
-  // Compare value x against the premise
-  switch (p->relop)
-    {
-    case EQ:
-      if (ABS (x - p->value) > tol)
-        return 0;
-      break;
-    case NE:
-      if (ABS (x - p->value) < tol)
-        return 0;
-      break;
-    case LT:
-      if (x > p->value + tol)
-        return 0;
-      break;
-    case LE:
-      if (x > p->value - tol)
-        return 0;
-      break;
-    case GT:
-      if (x < p->value - tol)
-        return 0;
-      break;
-    case GE:
-      if (x < p->value + tol)
-        return 0;
-      break;
-    }
-  return 1;
-}
-
-void
-updateactionlist (Project * pr, int i, Saction * actions)
-//---------------------------------------------------
-//    Adds rule's actions to action list
-//--------------------------------------------------
-{
-  Rules *rules = &pr->rules;
-
-  SactionList *actionItem;
-  Saction *a;
-
-  // Iterate through each action of Rule i
-  a = actions;
-  while (a != NULL)
-    {
-      // Add action to list if its link not already on it
-      if (!onactionlist (pr, i, a))
-        {
-          actionItem = (SactionList *) malloc (sizeof (SactionList));
-          if (actionItem != NULL)
-            {
-              actionItem->action = a;
-              actionItem->ruleIndex = i;
-              actionItem->next = rules->ActionList;
-              rules->ActionList = actionItem;
-            }
-        }
-      a = a->next;
-    }
-}
-
-int
-onactionlist (Project * pr, int i, Saction * a)
-//-----------------------------------------------------------------------------
-//  Checks if action a from rule i can be added to the action list
-//-----------------------------------------------------------------------------
-{
-  Network *net = &pr->network;
-
-  int link, i1;
-  SactionList *actionItem;
-  Saction *a1;
-
-  // Search action list for link included in action a
-  link = a->link;
-  actionItem = pr->rules.ActionList;
-  while (actionItem != NULL)
-    {
-      a1 = actionItem->action;
-      i1 = actionItem->ruleIndex;
-
-      // Link appears in list
-      if (link == a1->link)
-        {
-          // Replace its action with 'a' if rule i has higher priority
-          if (net->Rule[i].priority > net->Rule[i1].priority)
-            {
-              actionItem->action = a;
-              actionItem->ruleIndex = i;
-            }
-
-          // Return indicating that 'a' should not be added to action list
-          return 1;
-        }
-      actionItem = actionItem->next;
-    }
-
-  // Return indicating that it's ok to add 'a' to the action list
-  return 0;
-}
-
-int
-takeactions (Project * pr)
-//-----------------------------------------------------------
-//    Implements actions on action list
-//-----------------------------------------------------------
-{
-  Network *net = &pr->network;
-  Hydraul *hyd = &pr->hydraul;
-  Report *rpt = &pr->report;
-  Rules *rules = &pr->rules;
-
-  char flag;
-  int k, s, n;
-  double tol = 1.e-3, v, x;
-  Saction *a;
-  SactionList *actionItem;
-
-  n = 0;
-  actionItem = rules->ActionList;
-  while (actionItem != NULL)
-    {
-      flag = FALSE;
-      a = actionItem->action;
-      k = a->link;
-      s = hyd->LinkStatus[k];
-      v = hyd->LinkSetting[k];
-      x = a->setting;
-
-      // Switch link from closed to open
-      if (a->status == IS_OPEN && s <= CLOSED)
-        {
-          setlinkstatus (pr, k, 1, &hyd->LinkStatus[k], &hyd->LinkSetting[k]);
-          flag = TRUE;
-        }
-
-      // Switch link from not closed to closed
-      else if (a->status == IS_CLOSED && s > CLOSED)
-        {
-          setlinkstatus (pr, k, 0, &hyd->LinkStatus[k], &hyd->LinkSetting[k]);
-          flag = TRUE;
-        }
-
-      // Change link's setting
-      else if (x != MISSING)
-        {
-          switch (net->Link[k].Type)
-            {
-            case PRV:
-            case PSV:
-            case PBV:
-              x = x / pr->Ucf[PRESSURE];
-              break;
-            case FCV:
-              x = x / pr->Ucf[FLOW];
-              break;
-            default:
-              break;
-            }
-          if (ABS (x - v) > tol)
-            {
-              setlinksetting (pr, k, x, &hyd->LinkStatus[k],
-                              &hyd->LinkSetting[k]);
-              flag = TRUE;
-            }
-        }
-
-      // Report rule action
-      if (flag == TRUE)
-        {
-          n++;
-          if (rpt->Statflag)
-            {
-              writeruleaction (pr, k, net->Rule[actionItem->ruleIndex].label);
-            }
-        }
-
-      // Move to next action on list
-      actionItem = actionItem->next;
-    }
-  return n;
 }
 
 void

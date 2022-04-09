@@ -1,6 +1,8 @@
 /**
  * \file genmmd.c
  * \brief Source file for multiple minimum degree row re-ordering algorithm.
+ * \authors see AUTHORS.
+ * \copyright see AUTHORS.
  */
 
 #include <math.h>

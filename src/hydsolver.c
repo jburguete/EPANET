@@ -21,6 +21,7 @@
 #include "types.h"
 #include "funcs.h"
 #include "text.h"
+#include "report.h"
 #include "smatrix.h"
 
 // Hydraulic balance error for network being analyzed

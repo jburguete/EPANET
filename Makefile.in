@@ -9,6 +9,7 @@ CPGOFLAGS = -c -fPIC $(CFLAGS) @PGO_GENERATE@
 LIBS = @GLIB_LIBS@ -lm
 PGO = @PGO@
 
+enumstxt_c = $(SRC)enumstxt.c
 epanet_c = $(SRC)epanet.c
 epanet2_c = $(SRC)epanet2.c
 genmmd_c = $(SRC)genmmd.c
@@ -31,17 +32,19 @@ report_c = $(SRC)report.c
 rules_c = $(SRC)rules.c
 smatrix_c = $(SRC)smatrix.c
 
+enumstxt_h = $(SRC)enumstxt.h
 epanet_h = $(INC)epanet2_2.h $(INC)epanet2_enums.h
 epanet2_h = $(INC)epanet2.h $(INC)epanet2_enums.h
-enumstxt_h = $(SRC)enumstxt.h
 errors_h = $(SRC)errors.dat
 funcs_h = $(SRC)funcs.h
 genmmd_h = $(SRC)genmmd.h
 mempool_h = $(SRC)mempool.h
+report_h = $(SRC)report.h
 smatrix_h = $(SRC)smatrix.h
 text_h = $(SRC)text.h
 types_h = $(SRC)types.h
 
+enumstxt_pgo = $(OBJ)enumstxt.pgo
 epanet_pgo = $(OBJ)epanet.pgo
 epanet2_pgo = $(OBJ)epanet2.pgo
 genmmd_pgo = $(OBJ)genmmd.pgo
@@ -64,6 +67,7 @@ report_pgo = $(OBJ)report.pgo
 rules_pgo = $(OBJ)rules.pgo
 smatrix_pgo = $(OBJ)smatrix.pgo
 
+enumstxt_o = $(OBJ)enumstxt.o
 epanet_o = $(OBJ)epanet.o
 epanet2_o = $(OBJ)epanet2.o
 genmmd_o = $(OBJ)genmmd.o
@@ -94,45 +98,54 @@ epanet_lib = -lepanet
 epanet_so = $(BIN)libepanet@SO@
 epanet_exe = $(BIN)epanet@EXE@
 
-objspgo = $(epanet_pgo) $(epanet2_pgo) $(genmmd_pgo) $(hydcoeffs_pgo) \
-	$(hydraul_pgo) $(hydsolver_pgo) $(hydstatus_pgo) $(inpfile_pgo) \
-	$(input1_pgo) $(input2_pgo) $(input3_pgo) $(mempool_pgo) $(output_pgo) \
-	$(project_pgo) $(quality_pgo) $(qualreact_pgo) $(qualroute_pgo) \
-	$(report_pgo) $(rules_pgo) $(smatrix_pgo)
+objspgo = $(enumstxt_pgo) $(epanet_pgo) $(epanet2_pgo) $(genmmd_pgo) \
+	$(hydcoeffs_pgo) $(hydraul_pgo) $(hydsolver_pgo) $(hydstatus_pgo) \
+	$(inpfile_pgo) $(input1_pgo) $(input2_pgo) $(input3_pgo) $(mempool_pgo) \
+ 	$(output_pgo) $(project_pgo) $(quality_pgo) $(qualreact_pgo) \
+ 	$(qualroute_pgo) $(report_pgo) $(rules_pgo) $(smatrix_pgo)
 
-objs = $(epanet_o) $(epanet2_o) $(genmmd_o) $(hydcoeffs_o) $(hydraul_o) \
-	$(hydsolver_o) $(hydstatus_o) $(inpfile_o) $(input1_o) $(input2_o) \
-	$(input3_o) $(mempool_o) $(output_o) $(project_o) $(quality_o) \
+objs = $(enumstxt_o) $(epanet_o) $(epanet2_o) $(genmmd_o) $(hydcoeffs_o) \
+	$(hydraul_o) $(hydsolver_o) $(hydstatus_o) $(inpfile_o) $(input1_o) \
+	$(input2_o) $(input3_o) $(mempool_o) $(output_o) $(project_o) $(quality_o) \
 	$(qualreact_o) $(qualroute_o) $(report_o) $(rules_o) $(smatrix_o)
 
+enumstxt_dep_pgo = $(enumstxt_c) $(text_h) $(enumstxt_h) Makefile
 epanet_dep_pgo = $(epanet_c) $(epanet_h) $(types_h) $(funcs_h) $(text_h) \
-	$(enumstxt_h) Makefile
+	$(enumstxt_h) $(report_h) Makefile
 epanet2_dep_pgo = $(epanet2_c) $(types_h) $(funcs_h) $(epanet2_h) $(epanet_h) \
 	Makefile
 genmmd_dep_pgo = $(genmmd_c) $(genmmd_h) Makefile
 hydcoeffs_dep_pgo = $(hydcoeffs_c) $(types_h) $(funcs_h) Makefile
-hydraul_dep_pgo = $(hydraul_c) $(types_h) $(funcs_h) $(text_h) $(smatrix_h) \
-	Makefile
-hydsolver_dep_pgo = $(hydsolver_c) $(types_h) $(funcs_h) $(text_h) \
+hydraul_dep_pgo = $(hydraul_c) $(types_h) $(funcs_h) $(text_h) $(report_h) \
 	$(smatrix_h) Makefile
-hydstatus_dep_pgo = $(hydstatus_c) $(types_h) $(funcs_h) Makefile
-inpfile_dep_pgo = $(inpfile_c) $(types_h) $(funcs_h) $(text_h) Makefile
-input1_dep_pgo = $(input1_c) $(types_h) $(funcs_h) $(text_h) Makefile
-input2_dep_pgo = $(input2_c) $(types_h) $(funcs_h) $(text_h) Makefile
-input3_dep_pgo = $(input3_c) $(types_h) $(funcs_h) $(text_h) Makefile
+hydsolver_dep_pgo = $(hydsolver_c) $(types_h) $(funcs_h) $(text_h) $(report_h) \
+	$(smatrix_h) Makefile
+hydstatus_dep_pgo = $(hydstatus_c) $(types_h) $(funcs_h) $(report_h) Makefile
+inpfile_dep_pgo = $(inpfile_c) $(types_h) $(funcs_h) $(text_h) $(enumstxt_h) \
+	$(report_h) Makefile
+input1_dep_pgo = $(input1_c) $(types_h) $(funcs_h) $(text_h) $(enumstxt_h) \
+	$(report_h) Makefile
+input2_dep_pgo = $(input2_c) $(types_h) $(funcs_h) $(text_h) $(enumstxt_h) \
+	$(report_h) Makefile
+input3_dep_pgo = $(input3_c) $(types_h) $(funcs_h) $(text_h) $(enumstxt_h) \
+	Makefile
 main_dep_pgo = $(main_c) $(epanet2_h) Makefile
 mempool_dep_pgo = $(mempool_c) $(mempool_h) Makefile
 output_dep_pgo = $(output_c) $(types_h) $(funcs_h) $(text_h) Makefile
-project_dep_pgo = $(project_c) $(types_h) $(funcs_h) $(errors_h) Makefile
-quality_dep_pgo = $(quality_c) $(mempool_h) $(types_h) $(funcs_h) Makefile
+project_dep_pgo = $(project_c) $(types_h) $(funcs_h) $(errors_h) $(report_h) \
+	Makefile
+quality_dep_pgo = $(quality_c) $(mempool_h) $(types_h) $(funcs_h) $(report_h) \
+	Makefile
 qualreact_dep_pgo = $(qualreact_c) $(types_h) Makefile
 qualroute_dep_pgo = $(qualroute_c) $(mempool_h) $(types_h) Makefile
-report_dep_pgo = $(report_c) $(text_h) $(types_h) $(funcs_h) $(vars_h) Makefile
-rules_dep_pgo = $(rules_c) $(text_h) $(types_h) $(funcs_h) $(vars_h) Makefile
-smatrix_dep_pgo = $(smatrix_c) $(text_h) $(types_h) $(funcs_h) $(vars_h) \
-	$(genmmd_h) $(smatrix_h) Makefile
+report_dep_pgo = $(report_c) $(types_h) $(funcs_h) $(text_h) $(enumstxt_h) \
+	$(report_h) Makefile
+rules_dep_pgo = $(rules_c) $(text_h) $(types_h) $(funcs_h) $(report_h) Makefile
+smatrix_dep_pgo = $(smatrix_c) $(text_h) $(types_h) $(funcs_h) $(genmmd_h) \
+	$(smatrix_h) Makefile
 
 ifeq ($(PGO), 1)
+	enumstxt_dep = $(enumstxtpgo_exe)
 	epanet_dep = $(epanetpgo_exe)
 	epanet2_dep = $(epanetpgo_exe)
 	genmmd_dep = $(epanetpgo_exe)
@@ -180,6 +193,9 @@ else
 endif
 
 all: $(OBJ) $(BIN) $(epanet_exe)
+
+$(enumstxt_pgo): $(enumstxt_dep_pgo) 
+	$(CC) $(CPGOFLAGS) $(enumstxt_c) -o $(enumstxt_pgo)
 
 $(epanet_pgo): $(epanet_dep_pgo) 
 	$(CC) $(CPGOFLAGS) $(epanet_c) -o $(epanet_pgo)
@@ -251,6 +267,9 @@ $(epanetpgo_exe): $(epanetpgo_so) $(main_pgo) $(BIN)script-pgo.sh
 	$(CC) $(main_pgo) @PGO_GENERATE@ -o $(epanetpgo_exe) -L$(BIN) -Wl,-rpath=. \
 		$(epanetpgo_lib) $(LIBS)
 	cd $(BIN); ./script-pgo.sh; @PGO_MERGE@
+
+$(enumstxt_o): $(enumstxt_dep)
+	$(CC) $(COFLAGS) $(enumstxt_c) -o $(enumstxt_o)
 
 $(epanet_o): $(epanet_dep)
 	$(CC) $(COFLAGS) $(epanet_c) -o $(epanet_o)

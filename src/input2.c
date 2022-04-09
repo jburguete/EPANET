@@ -20,10 +20,10 @@ Last Updated: 10/29/2019
 #include "types.h"
 #include "funcs.h"
 #include "text.h"
+#include "enumstxt.h"
+#include "report.h"
 
 #define MAXERRS 10              // Max. input errors reported
-
-extern char *SectTxt[];         // Input section keywords (see ENUMSTXT.H)
 
 // Exported functions
 int addnodeID (Network * n, int, char *);
@@ -704,7 +704,7 @@ unlinked (Project * pr)
 }
 
 int
-findmatch (char *line, char *keyword[])
+findmatch (char *line, const char *keyword[])
 /*
 **--------------------------------------------------------------
 **  Input:   *line      = line from input file

@@ -24,6 +24,7 @@
 
 #include "types.h"
 #include "funcs.h"
+#include "report.h"
 
 
 int

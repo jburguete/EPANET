@@ -20,19 +20,8 @@ Last Updated: 10/29/2019
 #include "types.h"
 #include "funcs.h"
 #include "text.h"
-
-// Defined in enumstxt.h in EPANET.C
-extern char *LinkTxt[];
-extern char *FormTxt[];
-extern char *StatTxt[];
-extern char *FlowUnitsTxt[];
-extern char *PressUnitsTxt[];
-extern char *ControlTxt[];
-extern char *SourceTxt[];
-extern char *MixTxt[];
-extern char *TstatTxt[];
-extern char *RptFlagTxt[];
-extern char *SectTxt[];
+#include "enumstxt.h"
+#include "report.h"
 
 void
 saveauxdata (Project * pr, FILE * f)
